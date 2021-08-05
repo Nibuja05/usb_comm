@@ -12,6 +12,7 @@ class SetupTypes(Enum):
 	START = "start"
 	STOP = "stop"
 	CLEAR = "clear"
+	STATUS = "status"
 
 	@classmethod
 	def toList(cls):
@@ -35,7 +36,6 @@ def main(args):
 		showHelp()
 		sys.exit()
 
-	print("START")
 	onStart()
 
 	# Run according function
@@ -48,6 +48,8 @@ def main(args):
 		stop()
 	elif setupType == SetupTypes.CLEAR:
 		clear()
+	elif setupType == SetupTypes.STATUS:
+		status()
 
 
 def showHelp():
@@ -64,6 +66,8 @@ gadgetPath = ""
 
 FUNC_TYPE = "acm"
 FUNC_NAME = "ttyS1"
+# FUNC_TYPE = "mass_storage"
+# FUNC_NAME = "0"
 
 # Helper functions
 
@@ -114,29 +118,39 @@ def getGadgetPath():
 
 def create():
 	# for i in range(maxDeviceCount):
-	for i in range(3):
+	for i in range(1):
 		name = "usb_%s" % i
-		runRootCommand("gt create %s idProduct=0x00%s idVendor=0x1209 product='Virtual USB Device' manufacturer='USB Setup Helper' serialnumber='%s'" % (name, i, i))
+		# idProduct=0x00%s idVendor=0x1209
+		runRootCommand("gt create %s idProduct=0x0104 idVendor=0x1d6b product='Virtual USB Device' manufacturer='USB Setup Helper' serialnumber='%s'" % (name, i))
 		runRootCommand("gt config create %s def 1" % name)
-		runRootCommand("gt config create %s def 2" % name)
+		# runRootCommand("gt config create %s def 2" % name)
 		runRootCommand("gt func create %s %s %s" % (name, FUNC_TYPE, FUNC_NAME))
 		runRootCommand("gt config add %s def 1 %s %s" % (name, FUNC_TYPE, FUNC_NAME))
-		runRootCommand("gt config add %s def 2 %s %s" % (name, FUNC_TYPE, FUNC_NAME))
+		# runRootCommand("gt config add %s def 2 %s %s" % (name, FUNC_TYPE, FUNC_NAME))
+	print("DONE")
 
 
 def start():
 	for udc, gadget in enumerate(getAllUSBGadgets()):
 		runRootCommand("gt enable %s %s" % (gadget, "dummy_udc.%s" % udc))
+	print("DONE")
 
 
 def stop():
 	for gadget in getAllUSBGadgets():
 		runRootCommand("gt disable %s" % gadget)
+	print("DONE")
 
 
 def clear():
 	for gadget in getAllUSBGadgets():
 		runRootCommand("gt rm -r -f %s" % gadget)
+	print("DONE")
+
+
+def status():
+	print("STATUS")
+	print(" - MAX_DEVICES: %s" % maxDeviceCount)
 
 # Run Main
 
