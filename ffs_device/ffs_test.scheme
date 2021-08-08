@@ -1,0 +1,31 @@
+attrs : 
+{
+    idVendor = 0xABCD;
+    idProduct = 0x1234;
+};
+strings = (
+	{
+		lang = 0x409;
+		manufacturer = "Anton W.";
+		product = "FFS Test Gadget";
+		serialnumber="000000001";
+	}
+);
+functions : 
+{
+    ffs_loopback : 
+    {
+        instance = "loopback";
+        type = "ffs";
+    };
+};
+configs = ( 
+    {
+        id = 1;
+        name = "c";
+        functions = ( 
+            {
+                name = "ffs.loopback";
+                function = "ffs_loopback";
+            } );
+    } );

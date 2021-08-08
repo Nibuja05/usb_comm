@@ -1,10 +1,25 @@
-from util import runCommand, runRootCommand
 import sys
 import os
 import re
+import getopt
+import math
 from glob import glob
 from enum import Enum
-from subprocess import call
+
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
+
+from util import runRootCommand, runCommandWithOutput
+
+# Global variables
+
+maxDeviceCount = 1
+maxCount = 1
+gadgetPath = ""
+
+FUNC_TYPE = "acm"
+FUNC_NAME = "ttyS1"
 
 
 class SetupTypes(Enum):
@@ -26,20 +41,38 @@ def main(args):
 		print("Keine Parameter!\n")
 		showHelp()
 		sys.exit()
-	if len(args) > 1:
-		print("Zu viele Parameter!\n")
-		showHelp()
-		sys.exit()
 	setupType = args[0]
 	if setupType not in SetupTypes.toList():
 		print("Unzulässiger Setup Type!\n")
 		showHelp()
 		sys.exit()
 
-	onStart()
+	count = -1
+	try:
+		opts, args = getopt.getopt(args[1:], "c:", ["count="])
+	except getopt.GetoptError:
+		print("Unzulässige Parameter!")
+		sys.exit()
+	else:
+		if not len(opts) == 0:
+			for opt, arg in opts:
+				if opt == "-c" or opt == "--count":
+					if not arg.isdigit():
+						print("Count ist keine zulässige Angabe!")
+						sys.exit()
+					else:
+						count = int(arg)
+
+	setupType = SetupTypes[setupType.upper()]
+	setup(setupType, count)
+
+	print("DONE")
+
+
+def setup(setupType, count=-1):
+	onStart(count)
 
 	# Run according function
-	setupType = SetupTypes[setupType.upper()]
 	if setupType == SetupTypes.CREATE:
 		create()
 	elif setupType == SetupTypes.START:
@@ -57,17 +90,6 @@ def showHelp():
 	for type in SetupTypes.toList():
 		text += " - " + type + "\n"
 	print(text)
-
-
-# Global variables
-
-maxDeviceCount = 1
-gadgetPath = ""
-
-FUNC_TYPE = "acm"
-FUNC_NAME = "ttyS1"
-# FUNC_TYPE = "mass_storage"
-# FUNC_NAME = "0"
 
 # Helper functions
 
@@ -88,9 +110,12 @@ def getAllUSBGadgets():
 # Startup functions
 
 
-def onStart():
+def onStart(count):
+	global maxCount
 	getMaxDeviceCount()
 	getGadgetPath()
+	# maxCount = count if count >= 0 else maxDeviceCount
+	maxCount = count if count >= 0 else 4
 
 
 def getMaxDeviceCount():
@@ -113,44 +138,46 @@ def getGadgetPath():
 		sys.exit()
 	gadgetPath = path
 
+
+def getCurDeviceCount():
+	for i in range(0, maxDeviceCount or 10):
+		output = runCommandWithOutput("gt get usb_%s" % i)
+		if output == "":
+			return i
+	return maxDeviceCount
+
 # Main functionality
 
 
 def create():
-	# for i in range(maxDeviceCount):
-	for i in range(1):
+	curCount = getCurDeviceCount()
+	for i in range(curCount, maxCount):
 		name = "usb_%s" % i
-		# idProduct=0x00%s idVendor=0x1209
 		runRootCommand("gt create %s idProduct=0x0104 idVendor=0x1d6b product='Virtual USB Device' manufacturer='USB Setup Helper' serialnumber='%s'" % (name, i))
 		runRootCommand("gt config create %s def 1" % name)
-		# runRootCommand("gt config create %s def 2" % name)
 		runRootCommand("gt func create %s %s %s" % (name, FUNC_TYPE, FUNC_NAME))
 		runRootCommand("gt config add %s def 1 %s %s" % (name, FUNC_TYPE, FUNC_NAME))
-		# runRootCommand("gt config add %s def 2 %s %s" % (name, FUNC_TYPE, FUNC_NAME))
-	print("DONE")
 
 
 def start():
 	for udc, gadget in enumerate(getAllUSBGadgets()):
 		runRootCommand("gt enable %s %s" % (gadget, "dummy_udc.%s" % udc))
-	print("DONE")
 
 
 def stop():
 	for gadget in getAllUSBGadgets():
 		runRootCommand("gt disable %s" % gadget)
-	print("DONE")
 
 
 def clear():
 	for gadget in getAllUSBGadgets():
 		runRootCommand("gt rm -r -f %s" % gadget)
-	print("DONE")
 
 
 def status():
 	print("STATUS")
 	print(" - MAX_DEVICES: %s" % maxDeviceCount)
+	print(" - CUR_DEVICES: %s" % getCurDeviceCount())
 
 # Run Main
 

@@ -1,0 +1,4 @@
+[Service]
+ExecStart=/root/bin/ffs-test
+USBFunctionDescriptors=/root/descriptors-ffs-test.bin
+USBFunctionStrings=/root/strings-ffs-test.bin

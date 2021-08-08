@@ -1,0 +1,44 @@
+attrs :
+{
+	idVendor = 0x1d6b;
+	idProduct = 0x0104;
+};
+strings = (
+	{
+		lang = 0x409;
+		manufacturer = "USB Setup Helper";
+		product = "Virtual USB Device";
+		serialnumber = "001";
+	} );
+functions :
+{
+	acm_GS0 :
+	{
+		instance = "ttyS1";
+		type = "acm";
+		attrs :
+		{
+			port_num = 0;
+		};
+	};
+};
+configs = (
+	{
+		id = 1;
+		name = "def";
+		attrs :
+		{
+			bmAttributes = 0x80;
+			bMaxPower = 0x2;
+		};
+		strings = (
+			{
+				lang = 0x409;
+				configuration = "Configuration 1";
+			} );
+		functions = (
+			{
+				name = "acm.GS0";
+				function = "acm_GS0";
+			});
+	} );

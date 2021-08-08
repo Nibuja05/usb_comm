@@ -1,4 +1,11 @@
 {
     "python.linting.pycodestyleEnabled": true,
-    "python.linting.pylintEnabled": true
+    "python.linting.pycodestyleArgs": [
+        "--ignore=E402, W191",
+    ],
+    "python.linting.pylintEnabled": false,
+    "C_Cpp.intelliSenseEngine": "Default",
+    "files.associations": {
+        "sd-daemon.h": "c"
+    }
 }

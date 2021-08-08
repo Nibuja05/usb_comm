@@ -24,7 +24,7 @@ if dev.is_kernel_driver_active(0):
 # except Exception as e:
 # 	sys.exit("Could not claim the device: %s" % str(e))
 
-dev.set_configuration()
+# dev.set_configuration()
 
 CONFIGURATION_ID = 1
 SETTING_ID = 0
@@ -43,7 +43,7 @@ print(endpoint)
 # lid = util.get_langids(dev)[0]
 # s = util.get_string(dev, 5, lid)
 
-# t = endpoint.write("")
+# t = endpoint.write("gg")
 # print(t)
 
 # t = dev.ctrl_transfer(0x21, 0x22, 0x01 | 0x02, 0, None)

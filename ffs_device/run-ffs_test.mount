@@ -1,0 +1,16 @@
+[Unit]
+Description=Mount FunctionFS instance
+Requires=usb-gadget-ffs.service
+After=usb-gadget-ffs.service
+Before=ffs.socket
+
+[Mount]
+# "device" name (FunctionFS instance name)
+What=loopback
+Where=/run/ffs_test
+Type=functionfs
+Options=defaults
+TimeoutSec=5
+
+[Install]
+WantedBy=usb-gadget.target

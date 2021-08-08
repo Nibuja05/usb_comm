@@ -1,0 +1,13 @@
+[Unit]
+Description=Load USB gadget scheme
+Requires=sys-kernel-config.mount
+After=sys-kernel-config.mount
+
+[Service]
+ExecStart=/bin/gt load -o ffs_test.scheme ffs_test
+RemainAfterExit=yes
+ExecStop=/bin/gt rm -rf ffs_test
+Type=oneshot
+
+[Install]
+WantedBy=usb-gadget.target
