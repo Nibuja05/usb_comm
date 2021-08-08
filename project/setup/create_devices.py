@@ -153,7 +153,7 @@ def create():
 	curCount = getCurDeviceCount()
 	for i in range(curCount, maxCount):
 		name = "usb_%s" % i
-		runRootCommand("gt create %s idProduct=0x0104 idVendor=0x1d6b product='Virtual USB Device' manufacturer='USB Setup Helper' serialnumber='%s'" % (name, i))
+		runRootCommand("gt create %s idProduct=0x0104 idVendor=0x1d6b product='Virtual USB Device' manufacturer='USB Setup Helper' serialnumber='00%s'" % (name, i))
 		runRootCommand("gt config create %s def 1" % name)
 		runRootCommand("gt func create %s %s %s" % (name, FUNC_TYPE, FUNC_NAME))
 		runRootCommand("gt config add %s def 1 %s %s" % (name, FUNC_TYPE, FUNC_NAME))
