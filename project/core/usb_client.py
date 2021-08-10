@@ -56,7 +56,7 @@ class USB_Client(threading.Thread):
 			request = MsgCode[msg]
 			if request == MsgCode.STOP:
 				return "STOP"
-			if request == MsgCode.ECHO:
+			if request == MsgCode.PING:
 				response = MsgStatus.OK.value
 			if request == MsgCode.SEND:
 				response = MsgStatus.OK.value

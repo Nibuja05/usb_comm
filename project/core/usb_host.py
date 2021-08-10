@@ -39,7 +39,7 @@ class USB_Host:
 		return len(self.devices)
 
 	def ping(self, id: int = -1) -> bool:
-		answers = self.sendMessage(MsgCode.ECHO, id)
+		answers = self.sendMessage(MsgCode.PING, id)
 		if not isinstance(answers, list):
 			return answers == MsgStatus.OK
 		for answer in answers:

@@ -12,7 +12,7 @@ IN_ENDPOINT_ID = 0
 
 class MsgCode(ListEnum):
 	SEND = "SEND"
-	ECHO = "ECHO"
+	PING = "PING"
 	RECV = "RECV"
 	STOP = "STOP"
 
