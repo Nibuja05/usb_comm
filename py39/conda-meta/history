@@ -1,0 +1,25 @@
+==> 2021-08-09 14:42:13 <==
+# cmd: /home/anton/miniconda3/bin/conda create -p ./py39 python=3.9
+# conda version: 4.10.3
++defaults/linux-64::_libgcc_mutex-0.1-main
++defaults/linux-64::_openmp_mutex-4.5-1_gnu
++defaults/linux-64::ca-certificates-2021.7.5-h06a4308_1
++defaults/linux-64::certifi-2021.5.30-py39h06a4308_0
++defaults/linux-64::ld_impl_linux-64-2.35.1-h7274673_9
++defaults/linux-64::libffi-3.3-he6710b0_2
++defaults/linux-64::libgcc-ng-9.3.0-h5101ec6_17
++defaults/linux-64::libgomp-9.3.0-h5101ec6_17
++defaults/linux-64::libstdcxx-ng-9.3.0-hd4cf53a_17
++defaults/linux-64::ncurses-6.2-he6710b0_1
++defaults/linux-64::openssl-1.1.1k-h27cfd23_0
++defaults/linux-64::pip-21.2.2-py39h06a4308_0
++defaults/linux-64::python-3.9.6-h12debd9_0
++defaults/linux-64::readline-8.1-h27cfd23_0
++defaults/linux-64::setuptools-52.0.0-py39h06a4308_0
++defaults/linux-64::sqlite-3.36.0-hc218d9a_0
++defaults/linux-64::tk-8.6.10-hbc83047_0
++defaults/linux-64::xz-5.2.5-h7b6447c_0
++defaults/linux-64::zlib-1.2.11-h7b6447c_3
++defaults/noarch::tzdata-2021a-h52ac0ba_0
++defaults/noarch::wheel-0.36.2-pyhd3eb1b0_0
+# update specs: ['python=3.9']

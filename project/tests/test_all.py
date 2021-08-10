@@ -1,14 +1,11 @@
-import os
+import __init__
+import time
 import sys
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
-
 from util import runCommandWithOutput
 from test_connection import testUSBConnections
 from test_endpoint import testEndpoint
-from test_send import testSending
 from setup.create_devices import setup, SetupTypes
+from core.usb_manager import TestClientHostCommunication
 
 
 def main():
@@ -26,22 +23,25 @@ def getCurDeviceCount():
 def testAll():
 	prepareTest()
 	count = getCurDeviceCount()
-	print("Anzahl Testgeräte: %s" % count)
+	print("Device count: %s" % count)
 	if testUSBConnections() < count:
-		fail("USB Verbindung")
+		fail("USB Connection")
 	if testEndpoint() < count:
-		fail("USB Endpoint Verfügbarkeit")
-	if testSending() < count:
-		fail("USB Kommunikation")
+		fail("USB Endpoint Availability")
+	# if testSending() < count:
+		# fail("USB Kommunikation")
+	if not TestClientHostCommunication():
+		fail("USB Client <-> Host Communication")
 	cleanTest()
 
 	print("\nAlle Tests erfolgreich!")
 
 
 def prepareTest():
-	print("Tests werden vorbereitet...")
+	print("Initialize Test...")
 	setup(SetupTypes.CREATE, 4)
 	setup(SetupTypes.START)
+	time.sleep(1)
 
 
 def cleanTest():
@@ -49,7 +49,7 @@ def cleanTest():
 
 
 def fail(reason):
-	print("Test fehlgeschlagen!\n - " + reason)
+	print("Test failed!\n - " + reason)
 	cleanTest()
 	sys.exit()
 

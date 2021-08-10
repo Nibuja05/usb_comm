@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import usb.core as core
 import usb.util as util
 import sys
@@ -11,7 +12,7 @@ def main():
 
 
 def testEndpoint():
-	print("Teste USB Endpoint Verfügbarkeit...")
+	print("\nTest USB endoiint connection..")
 	devs = core.find(idVendor=0x1d6b, idProduct=0x0104, find_all=True)
 	count = 0
 	for dev in devs:
@@ -19,12 +20,12 @@ def testEndpoint():
 			try:
 				dev.detach_kernel_driver(0)
 			except core.USBError as e:
-				sys.exit("Kernel driver konnte nicht detached werden: %s" % str(e))
+				sys.exit("Kernel driver couldn't be detached: %s" % str(e))
 
 		endpoint = getEndpoint(dev)
 		if endpoint is not None:
 			count += 1
-	print("Von %s Geräten den OUT Endpoint gefunden!" % count)
+	print("Found endpoint for %s devices!" % count)
 	return count
 
 

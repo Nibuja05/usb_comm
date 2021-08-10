@@ -1,16 +1,16 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
 import re
 import getopt
 import math
 from glob import glob
-from enum import Enum
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
-from util import runRootCommand, runCommandWithOutput
+from util import runRootCommand, runCommandWithOutput, ListEnum
 
 # Global variables
 
@@ -22,16 +22,12 @@ FUNC_TYPE = "acm"
 FUNC_NAME = "ttyS1"
 
 
-class SetupTypes(Enum):
+class SetupTypes(ListEnum):
 	CREATE = "create"
 	START = "start"
 	STOP = "stop"
 	CLEAR = "clear"
 	STATUS = "status"
-
-	@classmethod
-	def toList(cls):
-		return list(map(lambda c: c.value, cls))
 
 # Startup
 
