@@ -25,4 +25,7 @@ make install
 ```
 
 Sollte es Berechtigungsprobleme bei der Benutzung mit pyUSB geben, kann folgdende *udev* Regel helfen:
-`SUBSYSTEM=="usb", SUBSYSTEMS=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", GROUP="plugdev", MODE="0666"`
+
+```
+SUBSYSTEM=="usb", SUBSYSTEMS=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="1d6b", ATTRS{idProduct}=="0104", GROUP="plugdev", MODE="0666"
+```
