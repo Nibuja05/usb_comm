@@ -5,21 +5,31 @@ import re
 import getopt
 import math
 from glob import glob
+from typing import List, Literal, Tuple
 
 currentdir = os.path.dirname(os.path.realpath(__file__))
 parentdir = os.path.dirname(currentdir)
 sys.path.append(parentdir)
 
-from util import runRootCommand, runCommandWithOutput, ListEnum
+from util import runRootCommandIn, runRootCommand, runCommandWithOutput, ListEnum
+import core.usb_util as usb_util
 
 # Global variables
 
-maxDeviceCount = 1
-maxCount = 1
+maxDeviceCount = 0
+maxCount = -1
 gadgetPath = ""
 
-FUNC_TYPE = "acm"
-FUNC_NAME = "ttyS1"
+BASE_PATH = "/sys/kernel/config/usb_gadget"
+
+# loopback type
+FUNC_TYPE = "Loopback"
+FUNC_NAME = ""
+FUNC_NAME_BASE = ""
+
+# acm or loopback?
+FUNC_TYPE = usb_util.FUNC_TYPE
+FUNC_NAME_BASE = "ttyS" if usb_util.USE_ACM else ""
 
 
 class SetupTypes(ListEnum):
@@ -28,6 +38,17 @@ class SetupTypes(ListEnum):
 	STOP = "stop"
 	CLEAR = "clear"
 	STATUS = "status"
+
+
+# class FuncTypes(ListEnum):
+# 	ACM = "acm"
+# 	SERIAL = "gser"
+
+# def getFuncDef(funcType: FuncTypes) -> Tuple[str, str]:
+# 	if (funcType == FuncTypes.ACM):
+# 		return ("acm", "ttyS")
+# 	if
+
 
 # Startup
 
@@ -90,11 +111,7 @@ def showHelp():
 # Helper functions
 
 
-def addConfigurationName(index: int):
-	pass
-
-
-def getAllUSBGadgets():
+def getAllUSBGadgets() -> List[str]:
 	gadgets = []
 	for path in glob(os.path.join(gadgetPath, "usb_*/",)):
 		if (match := re.search(r'(\w+)/$', path)):
@@ -110,70 +127,156 @@ def onStart(count):
 	global maxCount
 	getMaxDeviceCount()
 	getGadgetPath()
-	# maxCount = count if count >= 0 else maxDeviceCount
-	maxCount = count if count >= 0 else 4
+
+	if maxCount < 0:
+		maxCount = maxDeviceCount
+	maxCount = count if count >= 0 else maxCount
+	# maxCount = 8 if usb_util.USE_ACM and maxCount > 8 else maxCount
 
 
 def getMaxDeviceCount():
 	global maxDeviceCount
-	dummyPath = "/sys/module/dummy_hcd"
-	if not os.path.isdir(dummyPath):
+	path = "/sys/module/dummy_hcd"
+	if not os.path.isdir(path):
 		print("DUMMY_HCD Module nicht gefunden!")
 		sys.exit()
-	numPath = os.path.join(dummyPath, "parameters/num")
+	numPath = os.path.join(path, "parameters/num")
 	if os.path.isfile(numPath):
 		with open(numPath, "r") as file:
 			maxDeviceCount = int(file.read())
 
 
-def getGadgetPath():
+def getGadgetPath() -> str:
 	global gadgetPath
-	path = "/sys/kernel/config/usb_gadget"
-	if not os.path.isdir(path):
-		print("%s nicht gefunden!" % path)
+	if not os.path.isdir(BASE_PATH):
+		print("%s nicht gefunden!" % BASE_PATH)
 		sys.exit()
-	gadgetPath = path
+	gadgetPath = BASE_PATH
 
 
-def getCurDeviceCount():
-	for i in range(0, maxDeviceCount or 10):
-		output = runCommandWithOutput("gt get usb_%s" % i)
-		if output == "":
-			return i
-	return maxDeviceCount
+def getCurDeviceCount() -> int:
+	count = 0
+	gadgetNames = [name for name in os.listdir(gadgetPath)]
+	for gadgetName in gadgetNames:
+		if "usb_" in gadgetName:
+			count += 1
+	return count
+
+
+def getActiveDeciveCount() -> int:
+	count = 0
+	gadgetNames = [name for name in os.listdir(gadgetPath)]
+	for gadgetName in gadgetNames:
+		if "usb_" in gadgetName:
+			path = os.path.join(gadgetPath, gadgetName)
+			with open(os.path.join(path, "UDC")) as file:
+				if "dummy_udc." in file.readline():
+					count += 1
+	return count
+
+
+def getFuncName(index: int, complete: bool = False) -> str:
+	funcName = FUNC_NAME_BASE + "%s" % (index + 0)
+	funcName = FUNC_NAME if FUNC_NAME != "" else funcName
+
+	if not complete:
+		return funcName
+	return "%s.%s" % (FUNC_TYPE, funcName)
 
 # Main functionality
 
 
+def createNewGadget(index: int, vendor: Literal, product: Literal):
+	name = "usb_%s" % index
+	completeFuncName = getFuncName(index, True)
+	gadgetDir = os.path.join(gadgetPath, name)
+
+	# create gadget
+	runRootCommand("mkdir %s" % gadgetDir)
+
+	# create config and function
+	runRootCommandIn("mkdir configs/def.1", gadgetDir)
+	runRootCommandIn("mkdir functions/%s" % completeFuncName, gadgetDir)
+
+	# create and set strings
+	runRootCommandIn("mkdir strings/0x409", gadgetDir)
+	runRootCommandIn("mkdir configs/def.1/strings/0x409", gadgetDir)
+	runRootCommandIn("echo %s > idProduct" % product, gadgetDir)
+	runRootCommandIn("echo %s > idVendor" % vendor, gadgetDir)
+	runRootCommandIn("echo %03d > strings/0x409/serialnumber" % index, gadgetDir)
+	runRootCommandIn("echo 'USB Setup Helper' > strings/0x409/manufacturer", gadgetDir)
+	runRootCommandIn("echo 'Virtual USB Device' > strings/0x409/product", gadgetDir)
+	runRootCommandIn("echo 'Primary configuration' > configs/def.1/strings/0x409/configuration", gadgetDir)
+
+	# link function
+	runRootCommandIn("ln -s functions/%s configs/def.1" % completeFuncName, gadgetDir)
+	# runCommandIn("", gadgetDir)
+
+
 def create():
 	curCount = getCurDeviceCount()
+	vendor = usb_util.VENDOR_ID
+	product = usb_util.PRODUCT_ID
 	for i in range(curCount, maxCount):
-		name = "usb_%s" % i
-		runRootCommand("gt create %s idProduct=0x0104 idVendor=0x1d6b product='Virtual USB Device' manufacturer='USB Setup Helper' serialnumber='00%s'" % (name, i))
-		runRootCommand("gt config create %s def 1" % name)
-		runRootCommand("gt func create %s %s %s" % (name, FUNC_TYPE, FUNC_NAME))
-		runRootCommand("gt config add %s def 1 %s %s" % (name, FUNC_TYPE, FUNC_NAME))
+		if not usb_util.USE_GT:
+			createNewGadget(i, vendor, product)
+		else:
+			name = "usb_%s" % i
+			runRootCommand("gt create %s idProduct=%s idVendor=%s product='Virtual USB Device' manufacturer='USB Setup Helper' serialnumber='000'" % (
+				name,
+				product,
+				vendor)
+			)
+			runRootCommand("gt config create %s def 1" % name)
+
+			funcName = getFuncName(i)
+			runRootCommand("gt func create %s %s %s" % (name, FUNC_TYPE, funcName))
+			runRootCommand("gt config add %s def 1 %s %s" % (name, FUNC_TYPE, funcName))
 
 
 def start():
 	for udc, gadget in enumerate(getAllUSBGadgets()):
-		runRootCommand("gt enable %s %s" % (gadget, "dummy_udc.%s" % udc))
+		if not usb_util.USE_GT:
+			gadgetDir = os.path.join(gadgetPath, gadget)
+			runRootCommandIn("echo dummy_udc.%s > UDC" % udc, gadgetDir)
+		else:
+			runRootCommand("gt enable %s %s" % (gadget, "dummy_udc.%s" % udc))
 
 
 def stop():
 	for gadget in getAllUSBGadgets():
-		runRootCommand("gt disable %s" % gadget)
+		if not usb_util.USE_GT:
+			gadgetDir = os.path.join(gadgetPath, gadget)
+			runRootCommandIn("echo '' > UDC", gadgetDir)
+		else:
+			runRootCommand("gt disable %s" % gadget)
 
 
 def clear():
+	# stop the devices first when not using GT
+	if not usb_util.USE_GT:
+		stop()
+
 	for gadget in getAllUSBGadgets():
-		runRootCommand("gt rm -r -f %s" % gadget)
+		if not usb_util.USE_GT:
+			index = int(gadget[4:])
+			gadgetDir = os.path.join(gadgetPath, gadget)
+			completeFuncName = getFuncName(index, True)
+			runRootCommandIn("rm configs/def.1/%s" % completeFuncName, gadgetDir)
+			runRootCommandIn("rmdir configs/def.1/strings/0x409", gadgetDir)
+			runRootCommandIn("rmdir configs/def.1", gadgetDir)
+			runRootCommandIn("rmdir functions/%s" % completeFuncName, gadgetDir)
+			runRootCommandIn("rmdir strings/0x409", gadgetDir)
+			runRootCommand("rmdir %s" % gadgetDir)
+		else:
+			runRootCommand("gt rm -r -f %s" % gadget)
 
 
 def status():
-	print("STATUS")
-	print(" - MAX_DEVICES: %s" % maxDeviceCount)
-	print(" - CUR_DEVICES: %s" % getCurDeviceCount())
+	print("STATUS (%s)" % FUNC_TYPE)
+	print(" - MAX DEVICES: %s" % maxDeviceCount)
+	print(" - CURRENT DEVICES: %s" % getCurDeviceCount())
+	print(" - ACTIVE DEVICES: %s" % getActiveDeciveCount())
 
 # Run Main
 

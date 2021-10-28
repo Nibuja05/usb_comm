@@ -1,11 +1,10 @@
-from functools import reduce
+import __init__
 import os
 import io
-import threading
-from typing import Dict, List, Union
-import traceback
-
+import sys
+from typing import Dict, List
 from core.usb_util import MsgAction, MsgOperation, MsgStatus, MsgSender, packMsg, unpackMsg, UnpackedMsg
+from core.resource_manager import SetClientCores
 
 
 def chunks(arr: List, n):
@@ -13,7 +12,7 @@ def chunks(arr: List, n):
 	return list(arr[i: i + n] for i in range(0, len(arr), n))
 
 
-class USB_Client(threading.Thread):
+class USB_Client():
 
 	def __init__(self, id: int):
 		super(USB_Client, self).__init__()
@@ -21,42 +20,36 @@ class USB_Client(threading.Thread):
 		self.active = False
 		self.deviceFile = "/dev/ttyGS%s" % (self.id)
 
-		# Set to true, if the next message is not a control code
-		# self.inputIncoming: bool = False
-		# self.output: str = ""
-
 	def activate(self):
 		if self.active:
 			print("Already active!")
 			return
 		self.active = True
-		self.start()
+		self.run()
 
 	def run(self):
 		try:
 			f = io.TextIOWrapper(io.FileIO(os.open(self.deviceFile, os.O_RDWR), "r+"))
 			for msg in iter(f.readline, None):
+				# print("Got msg", self.id)
 				unpackedMsg = unpackMsg(msg)
-				# print("RECV (Client): ", unpackedMsg)
 
 				response = self.respond(unpackedMsg)
 				responseMsg = packMsg(MsgSender.CLIENT, response["status"], response["action"], response["operation"], response["data"])
 
+				# print("Send:", self.id, responseMsg)
 				for rMsg in chunks(responseMsg, 255):
-					# print("Send:", rMsg)
 					f.write(rMsg)
-
-				# print("SEND (Client)", responseMsg)
 
 				# stop listening if stop command was send
 				if (response["action"] == MsgAction.STOP.value):
-					break
+					sys.exit()
 
 		except Exception as e:
 			print("Receive Error:", e)
-			print(traceback.format_exc())
 		finally:
-			f.close()
+			if "f" in locals():
+				f.close()
 
 	def respond(self, content: UnpackedMsg) -> Dict:
 		# print("Receive message: ", content)
@@ -93,9 +86,22 @@ class USB_Client(threading.Thread):
 				# data = input[1][input[0]]
 				raise Exception
 			elif content.operation == MsgOperation.TESTLOAD.value:
+				# count, dataLen = content.data.strip().split(",")
+				# num = 0
+				# for _ in range(int(count)):
+				# 	num += 1
+				# data = "a" * int(dataLen)
+				# data = "%s,%s" % (num, data)
 				dataLen = int(content.data.strip())
 				data = "a" * dataLen
 		except Exception as e:
 			status = MsgStatus.FAIL
 			print(e)
 		return status, data
+
+
+if __name__ == "__main__":
+	SetClientCores()
+	index = sys.argv[1:][0]
+	client = USB_Client(index)
+	client.activate()

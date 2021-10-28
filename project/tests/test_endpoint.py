@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 import usb.core as core
 import usb.util as util
 import sys
 
-CONFIGURATION_ID = 1
-SETTING_ID = 0
+import core.usb_util as usb_util
 
 
 def main():
@@ -12,7 +10,7 @@ def main():
 
 
 def testEndpoint():
-	print("\nTest USB endoiint connection..")
+	print("\nTest USB endpoint connection..")
 	devs = core.find(idVendor=0x1d6b, idProduct=0x0104, find_all=True)
 	count = 0
 	for dev in devs:
@@ -22,19 +20,19 @@ def testEndpoint():
 			except core.USBError as e:
 				sys.exit("Kernel driver couldn't be detached: %s" % str(e))
 
-		endpoint = getEndpoint(dev)
-		if endpoint is not None:
+		if getEndpoints(dev):
 			count += 1
-	print("Found endpoint for %s devices!" % count)
+	print("Found endpoints for %s devices!" % count)
 	return count
 
 
-def getEndpoint(dev):
+def getEndpoints(dev) -> bool:
 	cfg = dev.get_active_configuration()
-	interface = cfg[(CONFIGURATION_ID, SETTING_ID)]
-	return util.find_descriptor(
-		interface,
-		custom_match=lambda e: util.endpoint_direction(e.bEndpointAddress) == util.ENDPOINT_OUT)
+	interface = cfg[(usb_util.CONFIGURATION_ID, usb_util.SETTING_ID)]
+	out_ep = interface[usb_util.OUT_ENDPOINT_ID]
+	in_ep = interface[usb_util.IN_ENDPOINT_ID]
+
+	return out_ep and in_ep
 
 
 if __name__ == '__main__':

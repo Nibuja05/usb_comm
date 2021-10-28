@@ -1,58 +1,41 @@
 import __init__
 import time
 import sys
+import unittest
+
 from util import runCommandWithOutput
 from test_connection import testUSBConnections
 from test_endpoint import testEndpoint
-from setup.create_devices import setup, SetupTypes
-from core.usb_manager import TestClientHostCommunication
+from setup.create_devices import setup, SetupTypes, getCurDeviceCount
+from core.usb_manager import TestClientCalculation, TestClientHostCommunication
 
 
-def main():
-	testAll()
+class USB_Comm_Test(unittest.TestCase):
 
+	def setUp(self) -> None:
+		setup(SetupTypes.CREATE)
+		setup(SetupTypes.START)
 
-def getCurDeviceCount():
-	for i in range(10):
-		output = runCommandWithOutput("gt get usb_%s" % i)
-		if output == "":
-			return i
-	return 10
+		# wait for gadget creation!
+		time.sleep(1)
 
+		self.count: int = getCurDeviceCount()
 
-def testAll():
-	prepareTest()
-	count = getCurDeviceCount()
-	print("Device count: %s" % count)
-	if testUSBConnections() < count:
-		fail("USB Connection")
-	if testEndpoint() < count:
-		fail("USB Endpoint Availability")
-	# if testSending() < count:
-		# fail("USB Kommunikation")
-	if not TestClientHostCommunication():
-		fail("USB Client <-> Host Communication")
-	cleanTest()
+	def test_connection(self):
+		self.assertEqual(testUSBConnections(), self.count)
 
-	print("\nAlle Tests erfolgreich!")
+	def test_endpoints(self):
+		self.assertEqual(testEndpoint(), self.count)
 
+	def test_comm(self):
+		self.assertTrue(TestClientHostCommunication())
 
-def prepareTest():
-	print("Initialize Test...")
-	setup(SetupTypes.CREATE, 4)
-	setup(SetupTypes.START)
-	time.sleep(1)
+	def test_calc(self):
+		self.assertTrue(TestClientCalculation())
 
-
-def cleanTest():
-	setup(SetupTypes.CLEAR)
-
-
-def fail(reason):
-	print("Test failed!\n - " + reason)
-	cleanTest()
-	sys.exit()
+	def tearDown(self) -> None:
+		setup(SetupTypes.CLEAR)
 
 
 if __name__ == '__main__':
-	main()
+	unittest.main()

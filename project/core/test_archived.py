@@ -4,10 +4,16 @@ import usb.util as util
 import usb.control as control
 import sys
 import array
+import os
 
-# dev = core.find(idVendor=0x1d6b, idProduct=0x0104)
-# dev = core.find(idVendor=0x23a9, idProduct=0xef18)
-dev = core.find(idVendor=0x1a86, idProduct=0x7523)
+currentdir = os.path.dirname(os.path.realpath(__file__))
+parentdir = os.path.dirname(currentdir)
+sys.path.append(parentdir)
+
+import core.usb_util as usb_util
+
+# find device
+dev = core.find(idVendor=usb_util.VENDOR_ID, idProduct=usb_util.PRODUCT_ID)
 
 if dev.is_kernel_driver_active(0):
 	try:
@@ -16,35 +22,38 @@ if dev.is_kernel_driver_active(0):
 	except core.USBError as e:
 		sys.exit("Could not detach kernel driver: %s" % str(e))
 
-# try:
-# 	usb.util.claim_interface(dev, 0)
-# 	print("claimed device")
-# except Exception as e:
-# 	sys.exit("Could not claim the device: %s" % str(e))
-
-# dev.set_configuration()
-
-CONFIGURATION_ID = 0
-SETTING_ID = 0
-ENDPOINT_ID = 1
-
+# get config
 cfg = dev.get_active_configuration()
-interface = cfg[(CONFIGURATION_ID, SETTING_ID)]
-# endpoint = interface[ENDPOINT_ID]
-endpoint = util.find_descriptor(
-	interface,
-	# match the first OUT endpoint
-	custom_match=lambda e: util.endpoint_direction(e.bEndpointAddress) == util.ENDPOINT_OUT)
+# interface = cfg[(usb_util.CONFIGURATION_ID, usb_util.SETTING_ID)]
+# out_ep = interface[usb_util.OUT_ENDPOINT_ID]
+# in_ep = interface[usb_util.IN_ENDPOINT_ID]
 
-print(endpoint)
+print(cfg)
+
+# read/write tests
+sys.exit()
+
+testStr = "Test2"
+out_ep.write(testStr)
+t = in_ep.read(len(testStr) * 8)
+
+print(t)
+
+t = usb_util.byteArrToString(t)
+
+print(t)
+
+print(in_ep.read(10000))
+
+# print(endpoint)
 # t = endpoint.read(100)
 # print(t)
 # endpoint.write("1")
 
 # rc = dev.ctrl_transfer()
 
-ACM_CTRL_DTR = 0x01
-ACM_CTRL_RTS = 0x02
+# ACM_CTRL_DTR = 0x01
+# ACM_CTRL_RTS = 0x02
 
 # bmRequestType = util.build_request_type(util.CTRL_IN, util.CTRL_TYPE_STANDARD, util.CTRL_RECIPIENT_ENDPOINT)
 # c = dev.ctrl_transfer(bmRequestType, util.GET_STATUS, wIndex=0x81)
@@ -58,7 +67,7 @@ ACM_CTRL_RTS = 0x02
 # t = endpoint.write("gg")
 # print(t)
 
-encoding = array.array('B', [0x80, 0x25, 0x00, 0x00, 0x00, 0x00, 0x08])
+# encoding = array.array('B', [0x80, 0x25, 0x00, 0x00, 0x00, 0x00, 0x08])
 
 # Set line state
 # rc = dev.ctrl_transfer(0x21, 0x22, 0x01 | 0x02, 0, None)
@@ -73,7 +82,7 @@ encoding = array.array('B', [0x80, 0x25, 0x00, 0x00, 0x00, 0x00, 0x08])
 
 # print(t)
 
-endpoint.write('00000000000000000000000')
+# endpoint.write('00000000000000000000000')
 # t = endpoint.read(1000)
 # t = dev.read(0x85, 100)
 # dev.write()
