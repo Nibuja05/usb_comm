@@ -6,6 +6,16 @@
     "python.linting.pylintEnabled": false,
     "C_Cpp.intelliSenseEngine": "Default",
     "files.associations": {
-        "sd-daemon.h": "c"
+        "sd-daemon.h": "c",
+        "cmath": "c",
+        "cstdarg": "c",
+        "cstdio": "c",
+        "cstdlib": "c",
+        "type_traits": "c",
+        "limits": "c",
+        "*.tcc": "c",
+        "cstdbool": "c",
+        "cstdint": "c",
+        "typeinfo": "c"
     }
 }

@@ -100,6 +100,14 @@ class MeasurementFile():
 			varianceMeasurements.setdefault(dataSet.attrs["opCount"], {})[dataSet.attrs["tSize"]] = dataSet[:]
 		return varianceMeasurements
 
+	def addBootstrapResults(self, comType: CommunicationType, stdData, ciData1, ciData2):
+		self.addMeasurement("_STD", comType, {"description": "Standard error"})
+		self.addMeasurementData("_STD", comType, stdData)
+		self.addMeasurement("_CI1", comType, {"description": "Lower bound of confidence interval"})
+		self.addMeasurementData("_CI1", comType, ciData1)
+		self.addMeasurement("_CI2", comType, {"description": "Upper bound of confidence interval"})
+		self.addMeasurementData("_CI2", comType, ciData2)
+
 	def close(self):
 		self.file.close()
 
