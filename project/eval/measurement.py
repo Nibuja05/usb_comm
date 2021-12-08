@@ -9,18 +9,19 @@ from eval.storage import MeasurementFile, MeasurementTable
 from core.usb_host import USB_Host
 from util import printProgress
 
-# OPERATION_COUNTS = [10000, 100000, 1000000, 10000000]  # 200000...
-# TRANSFER_SIZES = [100, 1000, 10000, 100000]
+OPERATION_COUNTS = [10000, 100000, 1000000, 10000000]  # 200000...
+TRANSFER_SIZES = [100, 1000, 10000, 100000]
 # OPERATION_COUNTS = [100, 1000, 10000, 100000]  # 200000...
 # TRANSFER_SIZES = [1, 10, 100, 1000]
-OPERATION_COUNTS = [1000, 10000]
-TRANSFER_SIZES = [100, 1000]
+# OPERATION_COUNTS = [1000, 10000]
+# TRANSFER_SIZES = [1000, 10000]
 REPEAT_COUNT = 1
 
 
 def runTestsFor(comType: CommunicationType, loadsPerDevice: int) -> MeasurementTable:
 	print("Prepare Tests...")
 	host = GetAndActivateHost(comType)
+	host.prepareDevices()
 
 	# sometimes the first communication with a device is a little slower after the devices were created,
 	# so we ping them here to let the ping take up the creation delay
@@ -105,11 +106,11 @@ def main():
 
 	data = tab.export()
 	print(data)
-	# measureName = "Size1"
+	measureName = "Final"
 
-	# with MeasurementFile() as mf:
-	# 	mf.addMeasurement(measureName, comType, {"Info": "Measurements taken with a specific amount of Testloads per device", "Count": 1})
-	# 	mf.addMeasurementData(measureName, comType, data, {	"Repeats": REPEAT_COUNT})
+	with MeasurementFile() as mf:
+		mf.addMeasurement(measureName, comType, {"Info": "Measurements taken with a specific amount of Testloads per device", "Count": 1})
+		mf.addMeasurementData(measureName, comType, data, {	"Repeats": REPEAT_COUNT})
 
 	# host = GetAndActivateHost(CommunicationType.ASYNCIO)
 	# print(host.ping())

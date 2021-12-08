@@ -1,14 +1,15 @@
+from multiprocessing.connection import Connection
 import sys
 import os
 import usb.core as core
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Tuple
 import threading
-from multiprocessing import Process, Queue, Pool
+from multiprocessing import Pipe, Process, Queue, Pool
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 from functools import partial
-from timeit import default_timer as timer
+import psutil
 
 from core.usb_util import GetDevice, MsgAction, MsgOperation, MsgStatus, MsgSender, packMsg, unpackMsg, GetAllDevices, UnpackedMsg, byteArrToString
 from core.usb_util import CONFIGURATION_ID, SETTING_ID, OUT_ENDPOINT_ID, IN_ENDPOINT_ID
@@ -45,6 +46,9 @@ class USB_Host:
 		self.devices = None
 		self.count = count
 
+	def prepareDevices(self):
+		self.getDevices(-1)
+
 	def getCount(self) -> int:
 		return self.count
 
@@ -58,7 +62,11 @@ class USB_Host:
 		return True
 
 	def deactivate(self, id: int = -1) -> Union[MsgStatus, List[MsgStatus]]:
+		self.shutdown()
 		return self.sendMessage(MsgAction.STOP, MsgOperation.NONE, "", id)
+
+	def shutdown(self):
+		pass
 
 	def readMessage(self, dev: USB_Device, skipAll: bool = False, wantedAction: MsgAction = None, echoSize: int = 8, minSize: int = 0) -> UnpackedMsg:
 		try:
@@ -69,13 +77,8 @@ class USB_Host:
 				if skipAll:
 					continue
 
-				# print("LEN:", len(result), bufferSize)
-				# print(result)
-
-				# print("RECV (Host, RAW):", result)
 				msg = lastMsg + byteArrToString(result)
 				unpackedMsg = unpackMsg(msg)
-				# print("RECV (Host): ", unpackedMsg)
 
 				if not unpackedMsg.isEnd:
 					lastMsg = msg.strip()
@@ -181,7 +184,6 @@ class USB_Host_Threading(USB_Host):
 			for dev in self.getDevices(id):
 				self.readMessage(dev, True)
 				dev.device.finalize()
-			self.devices = None
 
 	def processRequests(self, operation: MsgOperation, data: str = "", count: int = 0):
 		results: List[UnpackedMsg] = [None] * self.getCount()
@@ -199,7 +201,7 @@ class USB_Host_Threading(USB_Host):
 		if operation == MsgOperation.TESTLOAD:
 			calculate(count)
 		dataLen = int(data)
-		device: USB_Device = USB_Device(index, GetDevice(index))
+		device = self.devices[index]
 		results[index] = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
 
 		device.device.finalize()
@@ -216,40 +218,87 @@ class USB_Host_Threading(USB_Host):
 
 class USB_Host_Multiprocessing(USB_Host):
 
+	def __init__(self, count):
+		self.devices = None
+		self.count = count
+		self.workerCount = 32
+		self.pCount = 6
+
+	def prepareDevices(self):
+		self.test = False
+
+		self.processes: List[Process] = []
+		self.cons: List[Tuple[Connection, Connection]] = []
+		for i in range(self.workerCount):
+			recvCon, sendCon = Pipe(False)
+			sRecvCon, sSendCon = Pipe(False)
+			process = Process(target=self.handleProcess, args=(i, sendCon, sRecvCon))
+			self.processes.append(process)
+			self.cons.append((recvCon, sSendCon))
+			process.start()
+
+		for i in range(self.workerCount):
+			con, _ = self.cons[i]
+			process = self.processes[i]
+			con.recv()
+			ps = psutil.Process(process.pid)
+			ps.suspend()
+
 	def getCount(self) -> int:
 		return 32
+
+	def shutdown(self):
+		for p in self.processes:
+			p.kill()
+		self.processes = None
+		self.cons = None
 
 	def clearMessages(self, id: int = -1):
 		with suppress_stdout():
 			for dev in self.getDevices(id):
 				self.readMessage(dev, True)
 				dev.device.finalize()
-			self.devices = None
 
 	def processRequests(self, operation: MsgOperation, data: str = "", count: int = 0):
-		workerCount = 32
-
 		messages: List[UnpackedMsg] = []
-		with Pool(6) as pool:
-			results = [pool.apply_async(self.processSingleRequest, (i, operation, data, count)) for i in range(workerCount)]
-			for res in results:
-				try:
-					result = res.get(timeout=10)
-					if result:
-						messages.append(result)
-				except Exception as e:
-					print("MP Error:", e)
+
+		# send request to process
+		for i in range(self.workerCount):
+			_, sendCon = self.cons[i]
+			process = self.processes[i]
+			ps = psutil.Process(process.pid)
+			ps.resume()
+			sendCon.send((operation, data, count))
+
+		# gather answers
+		for i in range(self.workerCount):
+			con, _ = self.cons[i]
+			process = self.processes[i]
+			messages.append(con.recv())
+			ps = psutil.Process(process.pid)
+			ps.suspend()
+
 		return messages
 
-	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
+	def handleProcess(self, index: int, sendCon: Connection, statusCon: Connection):
 		device: USB_Device = USB_Device(index, GetDevice(index))
+		sendCon.send(None)
 
+		while True:
+			operation, data, count = statusCon.recv()
+			answer = self.processSingleRequest(index, operation, data, count, device)
+			sendCon.send(answer)
+
+	def prepareDevice(self, index: int, sendCon: Connection):
+		device: USB_Device = USB_Device(index, GetDevice(index))
+		self.devices.insert(index, device)
+		sendCon.send(os.getpid())
+
+	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int, device: USB_Device):
 		if operation == MsgOperation.TESTLOAD:
 			calculate(count)
 
 		unpackedMsg = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, int(data), data)
-
-		# self.sendSingleMessage(device, MsgAction.STOP, MsgOperation.NONE)
 
 		device.device.finalize()
 
@@ -272,11 +321,8 @@ class USB_Host_Asyncio(USB_Host):
 			for dev in self.getDevices(id):
 				self.readMessage(dev, True)
 				dev.device.finalize()
-			self.devices = None
 
 	def processRequests(self, operation: MsgOperation, data: str = "", count: int = 0):
-		# res = asyncio.run(self.gatherAnswers(operation, data, count))
-
 		loop = asyncio.new_event_loop()
 		asyncio.set_event_loop(loop)
 		future = asyncio.ensure_future(self.processRequestsAsync(operation, data, count))
@@ -306,7 +352,7 @@ class USB_Host_Asyncio(USB_Host):
 		if operation == MsgOperation.TESTLOAD:
 			calculate(count)
 		dataLen = int(data)
-		device: USB_Device = USB_Device(index, GetDevice(index))
+		device = self.devices[index]
 		result = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
 
 		device.device.finalize()
