@@ -221,7 +221,7 @@ class USB_Host_Multiprocessing(USB_Host):
 	def __init__(self, count):
 		self.devices = None
 		self.count = count
-		self.workerCount = 32
+		self.workerCount = count
 		self.pCount = 6
 
 	def prepareDevices(self):
@@ -243,9 +243,6 @@ class USB_Host_Multiprocessing(USB_Host):
 			con.recv()
 			ps = psutil.Process(process.pid)
 			ps.suspend()
-
-	def getCount(self) -> int:
-		return 32
 
 	def shutdown(self):
 		for p in self.processes:
@@ -288,11 +285,6 @@ class USB_Host_Multiprocessing(USB_Host):
 			operation, data, count = statusCon.recv()
 			answer = self.processSingleRequest(index, operation, data, count, device)
 			sendCon.send(answer)
-
-	def prepareDevice(self, index: int, sendCon: Connection):
-		device: USB_Device = USB_Device(index, GetDevice(index))
-		self.devices.insert(index, device)
-		sendCon.send(os.getpid())
 
 	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int, device: USB_Device):
 		if operation == MsgOperation.TESTLOAD:

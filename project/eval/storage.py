@@ -100,6 +100,21 @@ class MeasurementFile():
 			varianceMeasurements.setdefault(dataSet.attrs["opCount"], {})[dataSet.attrs["tSize"]] = dataSet[:]
 		return varianceMeasurements
 
+	def getAvailableMeasurements(self, comType: CommunicationType, groupName: str):
+		group = self.file.require_group("%s/%s" % (comType.value, groupName))
+		dataIndex = 1
+		while "M%s" % dataIndex in group:
+			dataIndex += 1
+		data = group["M%s" % (dataIndex - 1)][:]
+		size = data.shape
+		tab = data[1:size[0], 1:size[1]]
+		opCountTab, tSizeTab = data[0, 1:size[1]], data[1:size[0], 0]
+		measurements = {}
+		for i1, opCount in enumerate(opCountTab):
+			for i2, tSize in enumerate(tSizeTab):
+				measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
+		return measurements
+
 	def addBootstrapResults(self, comType: CommunicationType, stdData, ciData1, ciData2):
 		self.addMeasurement("_STD", comType, {"description": "Standard error"})
 		self.addMeasurementData("_STD", comType, stdData)

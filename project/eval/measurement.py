@@ -3,22 +3,24 @@ from itertools import product
 from usb_testload import TestLoad
 from core.usb_manager import GetAndActivateHost, ProcessTestLoad
 from typing import List
+import time
 
 from core.usb_util import CommunicationType
 from eval.storage import MeasurementFile, MeasurementTable
 from core.usb_host import USB_Host
+from setup.create_devices import setup, SetupTypes
 from util import printProgress
 
-OPERATION_COUNTS = [10000, 100000, 1000000, 10000000]  # 200000...
-TRANSFER_SIZES = [100, 1000, 10000, 100000]
+# OPERATION_COUNTS = [10000, 100000, 1000000, 10000000]  # 200000...
+# TRANSFER_SIZES = [100, 1000, 10000, 100000]
 # OPERATION_COUNTS = [100, 1000, 10000, 100000]  # 200000...
 # TRANSFER_SIZES = [1, 10, 100, 1000]
-# OPERATION_COUNTS = [1000, 10000]
-# TRANSFER_SIZES = [1000, 10000]
-REPEAT_COUNT = 1
+OPERATION_COUNTS = [1000]
+TRANSFER_SIZES = [1000]
+REPEAT_COUNT = 10
 
 
-def runTestsFor(comType: CommunicationType, loadsPerDevice: int) -> MeasurementTable:
+def runTestsFor(comType: CommunicationType, loadsPerDevice: int = 1) -> MeasurementTable:
 	print("Prepare Tests...")
 	host = GetAndActivateHost(comType)
 	host.prepareDevices()
@@ -48,6 +50,7 @@ def runVarianceTestFor(comType: CommunicationType, opCount: int, tSize: int, rep
 		host = origHost
 	else:
 		host = GetAndActivateHost(comType)
+		host.prepareDevices()
 
 		# sometimes the first communication with a device is a little slower after the devices were created,
 		# so we ping them here to let the ping take up the creation delay
@@ -73,6 +76,7 @@ def runVarianceTestsForAll(comType: CommunicationType, repeats: int):
 	curProgress = 1
 
 	host = GetAndActivateHost(comType)
+	host.prepareDevices()
 
 	# sometimes the first communication with a device is a little slower after the devices were created,
 	# so we ping them here to let the ping take up the creation delay
@@ -90,8 +94,22 @@ def runVarianceTestsForAll(comType: CommunicationType, repeats: int):
 	host.deactivate()
 
 
+def runAutomatedTests():
+	deviceCount = 1
+	setup(SetupTypes.CREATE, deviceCount)
+	setup(SetupTypes.START)
+
+	time.sleep(0.25)
+
+	t = runTestsFor(CommunicationType.THREADING)
+	print(t.export())
+
+	setup(SetupTypes.CLEAR)
+
+
 def main():
-	comType = CommunicationType.MULTIPROCESSING
+	# comType = CommunicationType.THREADING
+	runAutomatedTests()
 
 	# runVarianceTestsForAll(comType, 100)
 
@@ -102,24 +120,25 @@ def main():
 	# with MeasurementFile() as mf:
 	# 	mf.addVarianceMeasurement(comType, opCount, tSize, data, {"Notice": "First Test"}, force=True)
 
-	tab = runTestsFor(comType, 1)
+	# tab = runTestsFor(comType, 1)
 
-	data = tab.export()
-	print(data)
-	measureName = "Final"
+	# data = tab.export()
+	# print(data)
+	# measureName = "Final"
 
-	with MeasurementFile() as mf:
-		mf.addMeasurement(measureName, comType, {"Info": "Measurements taken with a specific amount of Testloads per device", "Count": 1})
-		mf.addMeasurementData(measureName, comType, data, {	"Repeats": REPEAT_COUNT})
+	# with MeasurementFile() as mf:
+	# 	mf.addMeasurement(measureName, comType, {"Info": "Measurements taken with a specific amount of Testloads per device", "Count": 1})
+	# 	mf.addMeasurementData(measureName, comType, data, {	"Repeats": REPEAT_COUNT})
 
 	# host = GetAndActivateHost(CommunicationType.ASYNCIO)
-	# print(host.ping())
+	# host.prepareDevices()
+	# # print(host.ping())
 
 	# print("Clear messages...")
 	# host.clearMessages()
 	# print("CLear done!")
 
-	# tl1 = TestLoad(10, 10)
+	# tl1 = TestLoad(10000000, 100000)
 	# for i in range(1):
 	# 	ProcessTestLoad(host, tl1, -1, 1)
 	# 	print("\n\n%s/%s" % (tl1.successCount, tl1.tryCount), tl1.getAvgTime())

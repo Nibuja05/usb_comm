@@ -3,6 +3,7 @@ import __init__
 from typing import Any, List, Union
 import time
 from util import suppress_stdout
+from setup.create_devices import getActiveDeciveCount
 from core.usb_util import MsgOperation, MsgAction, MsgSender, USE_ACM, CommunicationType, MsgStatus, GetDeviceCount
 from core.usb_host import USB_Host, USB_Host_Asyncio, USB_Host_Multiprocessing, USB_Host_Threading
 from core.usb_client import USB_Client
@@ -42,8 +43,8 @@ def main():
 	host.deactivate()
 
 
-def ProcessTestLoad(host: USB_Host, load: TestLoad, clientID: int, count: int = 1):
-	for _ in range(count):
+def ProcessTestLoad(host: USB_Host, load: TestLoad, loadCount: int, clientID: int, repeats: int = 1):
+	for _ in range(repeats):
 		if clientID >= 0:
 			load.startMeasure()
 			answer, _ = host.requestClientAction(MsgOperation.TESTLOAD, str(load.dataLen), clientID, load.count)
@@ -53,7 +54,6 @@ def ProcessTestLoad(host: USB_Host, load: TestLoad, clientID: int, count: int = 
 				load.addFailedTry()
 		else:
 			load.startMeasure()
-			count = host.getCount()
 			answers = host.requestClientAction(MsgOperation.TESTLOAD, str(load.dataLen), clientID, load.count)
 			if not answers:
 				return
@@ -130,8 +130,7 @@ def MakeSingleClients(count: int):
 
 def GetAndActivateHost(comType: CommunicationType = CommunicationType.BASIC) -> USB_Host:
 	SetHostCores()
-	# count = GetDeviceCount()
-	count = 32
+	count = getActiveDeciveCount()
 
 	if comType == comType.THREADING:
 		host = USB_Host_Threading(count)
