@@ -13,6 +13,27 @@ from core.usb_util import CommunicationType
 from eval.measurement import OPERATION_COUNTS, TRANSFER_SIZES
 
 
+# from https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib
+def lighten_color(color, amount=0.5):
+	"""
+	Lightens the given color by multiplying (1-luminosity) by the given amount.
+	Input can be matplotlib color string, hex string, or RGB tuple.
+
+	Examples:
+	>> lighten_color('g', 0.3)
+	>> lighten_color('#F034A3', 0.6)
+	>> lighten_color((.3,.55,.1), 0.5)
+	"""
+	import matplotlib.colors as mc
+	import colorsys
+	try:
+		c = mc.cnames[color]
+	except Exception as e:
+		c = color
+	c = colorsys.rgb_to_hls(*mc.to_rgb(c))
+	return colorsys.hls_to_rgb(c[0], 1 - amount * (1 - c[1]), c[2])
+
+
 def calculateStatisticValues(values: List[float]) -> float:
 	count = len(values)
 	average = sum(values) / count
@@ -253,7 +274,7 @@ class DataVisualizer:
 			index += 1
 
 		plt.yticks(np.arange(0.5, 4, 1), range(1, 5))
-		plt.ylabel("Berechnugen")
+		plt.ylabel("Berechnungen")
 		plt.xticks(np.arange(0.5, 4, 1), ["A", "B", "C", "D"])
 		plt.xlabel("Datengröße")
 		plt.title("Messergebnisse")
@@ -261,15 +282,91 @@ class DataVisualizer:
 		plt.show()
 
 
+def showOperationProgression():
+	opCounts = np.linspace(10**4, 10**7, 25)
+
+	for comType in [CommunicationType.BASIC, CommunicationType.THREADING, CommunicationType.MULTIPROCESSING]:
+
+		with MeasurementFile() as mf:
+			data = mf.getSimpleMeasurement("CountProgress [%s]" % comType.value)
+
+			plt.plot(opCounts, data, label=comType.value)
+
+	for x in OPERATION_COUNTS:
+		plt.axvline(x, color="red", linewidth=2)
+
+	plt.xlabel("Berechnungen")
+	plt.ylabel("Messzeit in s")
+	plt.title("Unterschiedliche Berechnungen bei gleicher Größe (100)")
+	plt.legend(loc='best')
+	plt.show()
+
+
+def showDeviceCountProgression(opCount: int = 10000, tSize: int = 100):
+	fig = plt.figure(figsize=(8, 6))
+	ax = fig.add_subplot(111)
+	propCycle = plt.rcParams['axes.prop_cycle']
+	colors = propCycle.by_key()['color']
+	indeces = {
+		CommunicationType.BASIC: 0,
+		CommunicationType.THREADING: 1,
+		CommunicationType.ASYNCIO: 2,
+		CommunicationType.MULTIPROCESSING: 3,
+	}
+	width = 0.8 / (3)
+	X = np.arange(5)
+
+	xTicks = None
+
+	with MeasurementFile() as mf:
+		for i, comType in enumerate([CommunicationType.THREADING]):
+			for index, totalLoad in enumerate([1, 10, 50]):
+				result = mf.getAvailableMeasurements_new(comType, totalLoad)
+				xList = []
+				yList = []
+				for deviceCount, data in result.items():
+					xList.append(deviceCount)
+					# yList.append(data[opCount][tSize])
+
+				xList = list(map(lambda x: int(x), xList))
+				xList.sort()
+				for x in xList:
+					yList.append(result[str(x)][opCount][tSize])
+
+				if xTicks is None:
+					xTicks = xList
+
+				offset = i * (0.8 / 3)
+				color = lighten_color(colors[indeces[comType]], 0.4 + index * 0.3)
+				# color = colors[indeces[comType]]
+				ax.bar(X + offset + width * index, yList, width=width, label="%s [%s]" % (comType.value, totalLoad), color=color)
+
+	# plt.xticks(X + width * 4, xTicks)
+	plt.xticks(X + (width / 2) * 2, xTicks)
+	plt.xlabel("Geräteanzahl")
+	plt.ylabel("Messzeit in s")
+	plt.title("Abhängigkeit von Geräteanzahl und insgesammter Prüflast")
+
+	plt.figtext(0.81, 0.86, "Typ und Gesammte Prüflast", fontsize=12, ha="center")
+	plt.figtext(0.81, 0.3, "Operationen: %s\nDatengröße: %s" % (opCount, tSize), ha="center", fontsize=12, bbox={"facecolor": "gray", "alpha": 0.5, "pad": 5})
+	plt.subplots_adjust(left=0.1, bottom=0.1, right=0.65, top=0.9)
+	plt.legend(loc='best', bbox_to_anchor=(1, 0.95))
+	plt.show()
+
+
 if __name__ == "__main__":
-	vis = DataVisualizer()
+	showDeviceCountProgression()
+	showDeviceCountProgression(10000000, 100000)
+	# showOperationProgression()
+
+	# vis = DataVisualizer()
 	# vis.addData(CommunicationType.MULTIPROCESSING)
 	# vis.addData(CommunicationType.ASYNCIO)
-	vis.addData(CommunicationType.THREADING)
-	vis.addData(CommunicationType.BASIC)
+	# vis.addData(CommunicationType.THREADING)
+	# vis.addData(CommunicationType.BASIC)
 
 	# vis.showBars(opCount=10000000)
-	vis.show3dBars()
+	# vis.show3dBars()
 
 	# vis.showHist(10000, 100, True)
 	# vis.showHist(10000000, 100000, True)

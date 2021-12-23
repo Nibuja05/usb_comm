@@ -33,6 +33,10 @@ class USB_Client():
 			for msg in iter(f.readline, None):
 				# print("Got msg", self.id)
 				unpackedMsg = unpackMsg(msg)
+				if not unpackedMsg:
+					print("INVLALID MSG")
+					raise Exception("INVALID")
+					continue
 
 				response = self.respond(unpackedMsg)
 				responseMsg = packMsg(MsgSender.CLIENT, response["status"], response["action"], response["operation"], response["data"])
@@ -68,7 +72,7 @@ class USB_Client():
 			response["status"], response["data"] = self.handleInput(content)
 
 		else:
-			print("Cannot respond to: ", action)
+			print("Cannot respond [%s] to: " % self.id, action)
 		return response
 
 	def handleInput(self, content: UnpackedMsg) -> Dict:
@@ -86,12 +90,6 @@ class USB_Client():
 				# data = input[1][input[0]]
 				raise Exception
 			elif content.operation == MsgOperation.TESTLOAD.value:
-				# count, dataLen = content.data.strip().split(",")
-				# num = 0
-				# for _ in range(int(count)):
-				# 	num += 1
-				# data = "a" * int(dataLen)
-				# data = "%s,%s" % (num, data)
 				dataLen = int(content.data.strip())
 				data = "a" * dataLen
 		except Exception as e:

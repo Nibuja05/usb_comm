@@ -37,16 +37,14 @@ class USB_Client(threading.Thread):
 			f = io.TextIOWrapper(io.FileIO(os.open(self.deviceFile, os.O_RDWR), "r+"))
 			for msg in iter(f.readline, None):
 				unpackedMsg = unpackMsg(msg)
-				# print("RECV (Client): ", unpackedMsg)
+				if not unpackedMsg:
+					continue
 
 				response = self.respond(unpackedMsg)
 				responseMsg = packMsg(MsgSender.CLIENT, response["status"], response["action"], response["operation"], response["data"])
 
 				for rMsg in chunks(responseMsg, 255):
-					# print("Send:", rMsg)
 					f.write(rMsg)
-
-				# print("SEND (Client)", responseMsg)
 
 				# stop listening if stop command was send
 				if (response["action"] == MsgAction.STOP.value):

@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import traceback
 from functools import partial
 import psutil
+import time
 
 from core.usb_util import GetDevice, MsgAction, MsgOperation, MsgStatus, MsgSender, packMsg, unpackMsg, GetAllDevices, UnpackedMsg, byteArrToString
 from core.usb_util import CONFIGURATION_ID, SETTING_ID, OUT_ENDPOINT_ID, IN_ENDPOINT_ID
@@ -62,11 +63,7 @@ class USB_Host:
 		return True
 
 	def deactivate(self, id: int = -1) -> Union[MsgStatus, List[MsgStatus]]:
-		self.shutdown()
 		return self.sendMessage(MsgAction.STOP, MsgOperation.NONE, "", id)
-
-	def shutdown(self):
-		pass
 
 	def readMessage(self, dev: USB_Device, skipAll: bool = False, wantedAction: MsgAction = None, echoSize: int = 8, minSize: int = 0) -> UnpackedMsg:
 		try:
@@ -79,6 +76,8 @@ class USB_Host:
 
 				msg = lastMsg + byteArrToString(result)
 				unpackedMsg = unpackMsg(msg)
+				if not unpackedMsg:
+					continue
 
 				if not unpackedMsg.isEnd:
 					lastMsg = msg.strip()
@@ -141,20 +140,19 @@ class USB_Host:
 		answer = self.readMessage(device, wantedAction=action, echoSize=len(pack), minSize=minSize)
 		return answer
 
-	def requestClientAction(self, operation: MsgOperation, data: str = "", id: int = -1, count: int = 0):
+	def requestClientAction(self, operation: MsgOperation, maxDevices: int = -1, data: str = "", count: int = 0):
 		# do time intensive calculations on the host
-		if id > 0:
+		answers = []
+		actionCount = maxDevices if maxDevices >= 0 else self.getCount()
+		for i in range(actionCount):
 			if operation == MsgOperation.TESTLOAD:
 				calculate(count)
-			return self.sendMessage(MsgAction.CALCULATE, operation, data, id)
-		else:
-			answers = []
-			for i in range(self.getCount()):
-				if operation == MsgOperation.TESTLOAD:
-					calculate(count)
-				dataLen = int(data)
+			dataLen = int(data)
+			if dataLen > 0:
 				answers.append(self.sendMessage(MsgAction.CALCULATE, operation, data, i, minSize=dataLen))
-			return answers
+			else:
+				answers.append(UnpackedMsg._make([True, True, -1, -1, -1, -1, ""]))
+		return answers
 
 	def clearMessages(self, id: int = -1):
 		with suppress_stdout():
@@ -185,10 +183,10 @@ class USB_Host_Threading(USB_Host):
 				self.readMessage(dev, True)
 				dev.device.finalize()
 
-	def processRequests(self, operation: MsgOperation, data: str = "", count: int = 0):
+	def processRequests(self, operation: MsgOperation, actionCount: int, data: str = "", count: int = 0):
 		results: List[UnpackedMsg] = [None] * self.getCount()
 		threads: List[threading.Thread] = []
-		for i in range(self.getCount()):
+		for i in range(actionCount):
 			t = threading.Thread(target=self.processSingleRequest, args=(i, results, operation, data, count))
 			threads.append(t)
 			t.start()
@@ -198,22 +196,72 @@ class USB_Host_Threading(USB_Host):
 		return results
 
 	def processSingleRequest(self, index: int, results: List[UnpackedMsg], operation: MsgOperation, data: str, count: int):
+		# do time intensive calculations on the host
 		if operation == MsgOperation.TESTLOAD:
 			calculate(count)
 		dataLen = int(data)
 		device = self.devices[index]
-		results[index] = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
+		if dataLen > 0:
+			results[index] = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
+		else:
+			results[index] = UnpackedMsg._make([True, True, -1, -1, -1, -1, ""])
 
 		device.device.finalize()
 
-	def requestClientAction(self, operation: MsgOperation, data: str = "", id: int = -1, count: int = 0):
-		# do time intensive calculations on the host
-		if id > 0:
-			if operation == MsgOperation.TESTLOAD:
-				calculate(count)
-			return self.sendMessage(MsgAction.CALCULATE, operation, data, id)
+	def requestClientAction(self, operation: MsgOperation, maxDevices: int = -1, data: str = "", count: int = 0):
+		actionCount = maxDevices if maxDevices >= 0 else self.getCount()
+		return self.processRequests(operation, actionCount, data, count)
+
+
+class USB_Host_Asyncio(USB_Host):
+
+	def clearMessages(self, id: int = -1):
+		with suppress_stdout():
+			for dev in self.getDevices(id):
+				self.readMessage(dev, True)
+				dev.device.finalize()
+
+	def processRequests(self, operation: MsgOperation, actionCount: int, data: str = "", count: int = 0):
+		loop = asyncio.new_event_loop()
+		asyncio.set_event_loop(loop)
+		future = asyncio.ensure_future(self.processRequestsAsync(operation, actionCount, data, count))
+		loop.run_until_complete(future)
+		results = future.result()
+
+		return results
+
+	async def processRequestsAsync(self, operation: MsgOperation, actionCount: int, data: str, count: int):
+		results = []
+		with ThreadPoolExecutor(max_workers=actionCount) as executor:
+			loop = asyncio.get_event_loop()
+			tasks = [
+				loop.run_in_executor(
+					executor,
+					self.processSingleRequest,
+					*(id, operation, data, count)
+				)
+				for id in range(actionCount)
+			]
+			for response in await asyncio.gather(*tasks):
+				results.append(response)
+		return results
+
+	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
+		if operation == MsgOperation.TESTLOAD:
+			calculate(count)
+		dataLen = int(data)
+		device = self.devices[index]
+		if dataLen > 0:
+			result = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
 		else:
-			return self.processRequests(operation, data, count)
+			result = UnpackedMsg._make([True, True, -1, -1, -1, -1, ""])
+
+		device.device.finalize()
+		return result
+
+	def requestClientAction(self, operation: MsgOperation, maxDevices: int = -1, data: str = "", count: int = 0):
+		actionCount = maxDevices if maxDevices >= 0 else self.getCount()
+		return self.processRequests(operation, actionCount, data, count)
 
 
 class USB_Host_Multiprocessing(USB_Host):
@@ -244,9 +292,20 @@ class USB_Host_Multiprocessing(USB_Host):
 			ps = psutil.Process(process.pid)
 			ps.suspend()
 
-	def shutdown(self):
-		for p in self.processes:
-			p.kill()
+	def deactivate(self, id: int = -1) -> Union[MsgStatus, List[MsgStatus]]:
+		for i in range(self.workerCount):
+			_, sendCon = self.cons[i]
+			process = self.processes[i]
+			ps = psutil.Process(process.pid)
+			ps.resume()
+			sendCon.send((MsgOperation.NONE, None, None))
+
+		for i in range(self.workerCount):
+			con, _ = self.cons[i]
+			process = self.processes[i]
+			con.recv()
+			process.kill()
+
 		self.processes = None
 		self.cons = None
 
@@ -256,11 +315,11 @@ class USB_Host_Multiprocessing(USB_Host):
 				self.readMessage(dev, True)
 				dev.device.finalize()
 
-	def processRequests(self, operation: MsgOperation, data: str = "", count: int = 0):
+	def processRequests(self, operation: MsgOperation, actionCount: int, data: str = "", count: int = 0):
 		messages: List[UnpackedMsg] = []
 
 		# send request to process
-		for i in range(self.workerCount):
+		for i in range(min(self.workerCount, actionCount)):
 			_, sendCon = self.cons[i]
 			process = self.processes[i]
 			ps = psutil.Process(process.pid)
@@ -268,7 +327,7 @@ class USB_Host_Multiprocessing(USB_Host):
 			sendCon.send((operation, data, count))
 
 		# gather answers
-		for i in range(self.workerCount):
+		for i in range(min(self.workerCount, actionCount)):
 			con, _ = self.cons[i]
 			process = self.processes[i]
 			messages.append(con.recv())
@@ -283,78 +342,27 @@ class USB_Host_Multiprocessing(USB_Host):
 
 		while True:
 			operation, data, count = statusCon.recv()
-			answer = self.processSingleRequest(index, operation, data, count, device)
-			sendCon.send(answer)
+			if operation == MsgOperation.NONE:
+				self.sendSingleMessage(device, MsgAction.STOP, operation)
+				sendCon.send(None)
+			else:
+				answer = self.processSingleRequest(index, operation, data, count, device)
+				sendCon.send(answer)
 
 	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int, device: USB_Device):
+		# do time intensive calculations on the host
 		if operation == MsgOperation.TESTLOAD:
 			calculate(count)
 
-		unpackedMsg = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, int(data), data)
+		dataLen = int(data)
+		if dataLen > 0:
+			unpackedMsg = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
+		else:
+			unpackedMsg = UnpackedMsg._make([True, True, -1, -1, -1, -1, ""])
 
 		device.device.finalize()
-
 		return unpackedMsg
 
-	def requestClientAction(self, operation: MsgOperation, data: str = "", id: int = -1, count: int = 0):
-		# do time intensive calculations on the host
-		if id > 0:
-			if operation == MsgOperation.TESTLOAD:
-				calculate(count)
-			return self.sendMessage(MsgAction.CALCULATE, operation, data, id)
-		else:
-			return self.processRequests(operation, data, count)
-
-
-class USB_Host_Asyncio(USB_Host):
-
-	def clearMessages(self, id: int = -1):
-		with suppress_stdout():
-			for dev in self.getDevices(id):
-				self.readMessage(dev, True)
-				dev.device.finalize()
-
-	def processRequests(self, operation: MsgOperation, data: str = "", count: int = 0):
-		loop = asyncio.new_event_loop()
-		asyncio.set_event_loop(loop)
-		future = asyncio.ensure_future(self.processRequestsAsync(operation, data, count))
-		loop.run_until_complete(future)
-		results = future.result()
-
-		return results
-
-	async def processRequestsAsync(self, operation: MsgOperation, data: str, count: int):
-		devCount = self.getCount()
-		results = []
-		with ThreadPoolExecutor(max_workers=devCount) as executor:
-			loop = asyncio.get_event_loop()
-			tasks = [
-				loop.run_in_executor(
-					executor,
-					self.processSingleRequest,
-					*(id, operation, data, count)
-				)
-				for id in range(devCount)
-			]
-			for response in await asyncio.gather(*tasks):
-				results.append(response)
-		return results
-
-	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
-		if operation == MsgOperation.TESTLOAD:
-			calculate(count)
-		dataLen = int(data)
-		device = self.devices[index]
-		result = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
-
-		device.device.finalize()
-		return result
-
-	def requestClientAction(self, operation: MsgOperation, data: str = "", id: int = -1, count: int = 0):
-		# do time intensive calculations on the host
-		if id > 0:
-			if operation == MsgOperation.TESTLOAD:
-				calculate(count)
-			return self.sendMessage(MsgAction.CALCULATE, operation, data, id)
-		else:
-			return self.processRequests(operation, data, count)
+	def requestClientAction(self, operation: MsgOperation, maxDevices: int = -1, data: str = "", count: int = 0):
+		actionCount = maxDevices if maxDevices >= 0 else self.getCount()
+		return self.processRequests(operation, actionCount, data, count)

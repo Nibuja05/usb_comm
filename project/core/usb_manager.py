@@ -43,29 +43,28 @@ def main():
 	host.deactivate()
 
 
-def ProcessTestLoad(host: USB_Host, load: TestLoad, loadCount: int, clientID: int, repeats: int = 1):
+def ProcessTestLoad(host: USB_Host, load: TestLoad, loadCount: int, repeats: int = 1):
 	for _ in range(repeats):
-		if clientID >= 0:
-			load.startMeasure()
-			answer, _ = host.requestClientAction(MsgOperation.TESTLOAD, str(load.dataLen), clientID, load.count)
+		load.startMeasure()
+		maxCount = host.getCount()
+		curCount = 0
+		answers = []
+		while curCount < loadCount:
+			nextCount = min(loadCount - curCount, maxCount)
+			newAnswers = host.requestClientAction(MsgOperation.TESTLOAD, nextCount, str(load.dataLen), load.count)
+			if not newAnswers:
+				return
+			answers += newAnswers
+			curCount += nextCount
+		load.stopMeasure()
+		for i, answer in enumerate(answers):
 			if answer:
-				load.checkResult(answer.data)
+				try:
+					load.checkResult(answer.data, True)
+				except Exception as e:
+					load.addFailedTry()
 			else:
 				load.addFailedTry()
-		else:
-			load.startMeasure()
-			answers = host.requestClientAction(MsgOperation.TESTLOAD, str(load.dataLen), clientID, load.count)
-			if not answers:
-				return
-			load.stopMeasure()
-			for i, answer in enumerate(answers):
-				if answer:
-					try:
-						load.checkResult(answer.data, True)
-					except Exception as e:
-						load.addFailedTry()
-				else:
-					load.addFailedTry()
 
 
 def StartClientCalculation(host: USB_Host, operation: MsgOperation, data: str, clientID: int = -1) -> Union[None, str]:

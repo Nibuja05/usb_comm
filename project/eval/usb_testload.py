@@ -44,6 +44,9 @@ class TestLoad():
 		timeAvg = self.time / self.successCount
 		return timeAvg
 
+	def getTotalTime(self):
+		return self.time
+
 	def reset(self):
 		self.cancelMeasure()
 		self.time = 0

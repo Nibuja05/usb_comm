@@ -4,6 +4,7 @@ from usb_testload import TestLoad
 from core.usb_manager import GetAndActivateHost, ProcessTestLoad
 from typing import List
 import time
+import numpy as np
 
 from core.usb_util import CommunicationType
 from eval.storage import MeasurementFile, MeasurementTable
@@ -11,17 +12,17 @@ from core.usb_host import USB_Host
 from setup.create_devices import setup, SetupTypes
 from util import printProgress
 
-# OPERATION_COUNTS = [10000, 100000, 1000000, 10000000]  # 200000...
-# TRANSFER_SIZES = [100, 1000, 10000, 100000]
+OPERATION_COUNTS = [10000, 100000, 1000000, 10000000]  # 200000...
+TRANSFER_SIZES = [100, 1000, 10000, 100000]
 # OPERATION_COUNTS = [100, 1000, 10000, 100000]  # 200000...
 # TRANSFER_SIZES = [1, 10, 100, 1000]
-OPERATION_COUNTS = [1000]
-TRANSFER_SIZES = [1000]
-REPEAT_COUNT = 10
+# OPERATION_COUNTS = [20000000, 30000000]
+# TRANSFER_SIZES = [100]
+REPEAT_COUNT = 2
 
 
-def runTestsFor(comType: CommunicationType, loadsPerDevice: int = 1) -> MeasurementTable:
-	print("Prepare Tests...")
+def runTestsFor(comType: CommunicationType, totalLoads: int = 1) -> MeasurementTable:
+	print("\nPrepare Tests...")
 	host = GetAndActivateHost(comType)
 	host.prepareDevices()
 
@@ -34,7 +35,7 @@ def runTestsFor(comType: CommunicationType, loadsPerDevice: int = 1) -> Measurem
 	for opCount, tSize in product(OPERATION_COUNTS, TRANSFER_SIZES):
 		print("[%s, %s]" % (opCount, tSize))
 		tl = TestLoad(opCount, tSize)
-		ProcessTestLoad(host, tl, -1, REPEAT_COUNT)
+		ProcessTestLoad(host, tl, totalLoads, REPEAT_COUNT)
 		tab.insert(opCount, tSize, tl.getAvgTime())
 		# print("[%s, %s]" % (opCount, tSize), "%s/%s" % (tl.successCount, tl.tryCount), tl.getAvgTime())
 
@@ -94,22 +95,71 @@ def runVarianceTestsForAll(comType: CommunicationType, repeats: int):
 	host.deactivate()
 
 
-def runAutomatedTests():
-	deviceCount = 1
-	setup(SetupTypes.CREATE, deviceCount)
-	setup(SetupTypes.START)
+def runAutomatedTests(devices: List[int], totalLoads: List[int], comType: CommunicationType):
+	print("Starting Automated Tests for:\n - Device Counts: %s\n - Total Load Count: %s" % (devices, totalLoads))
 
-	time.sleep(0.25)
+	for deviceCount in devices:
+		print("\nRunning Tests for %s device%s..." % (deviceCount, "" if deviceCount == 1 else "s"))
 
-	t = runTestsFor(CommunicationType.THREADING)
-	print(t.export())
+		for totalLoad in totalLoads:
+			setup(SetupTypes.CLEAR)
+			setup(SetupTypes.CREATE, deviceCount)
+			setup(SetupTypes.START)
+			time.sleep(0.25)
 
-	setup(SetupTypes.CLEAR)
+			measureName = "%s/%s" % (totalLoad, deviceCount)
+
+			time.sleep(0.5)
+			table = runTestsFor(comType, totalLoad)
+			data = table.export()
+
+			with MeasurementFile() as mf:
+				mf.addMeasurement(measureName, comType, {
+					"Info": "Measurements taken with a specific amount of total testloads for device count",
+					"Total Load Count": totalLoad,
+					"Device Count": deviceCount
+				})
+				mf.addMeasurementData(measureName, comType, data, {"Repeats": REPEAT_COUNT})
+
+		setup(SetupTypes.CLEAR)
 
 
 def main():
-	# comType = CommunicationType.THREADING
-	runAutomatedTests()
+	comType = CommunicationType.THREADING
+	print("\n\nAUTOMATION FOR %s\n\n" % comType)
+	runAutomatedTests([1, 4, 8, 16, 32], [1, 10, 50], comType)
+
+	# setup(SetupTypes.CLEAR)
+	# setup(SetupTypes.CREATE)
+	# setup(SetupTypes.START)
+
+	# t = runVarianceTestFor(comType, 1000, 100, 10)
+	# print(t)
+
+	# print("Start...")
+
+	# host = GetAndActivateHost(comType)
+	# host.prepareDevices()
+	# host.ping()
+	# host.clearMessages()
+
+	# tl = TestLoad(0, 0)
+	# ProcessTestLoad(host, tl, 32, 500)
+
+	# print(tl.getAvgTime())
+
+	# opCounts = np.linspace(10**4, 10**7, 25)
+	# results = []
+
+	# for opCount, tSize in product(opCounts, TRANSFER_SIZES):
+	# 	print("[%s, %s]" % (opCount, tSize))
+	# 	tl = TestLoad(opCount, tSize)
+	# 	ProcessTestLoad(host, tl, 32, REPEAT_COUNT)
+	# 	results.append(tl.getAvgTime())
+	# 	# print(tl.getAvgTime())
+
+	# with MeasurementFile() as mf:
+	# 	mf.addSimpleMeasurement(results, "CountProgress [%s]" % comType.value, {"info": "created with 'np.linspace(10**4, 10**7, 25)'", "transfer size": "100"})
 
 	# runVarianceTestsForAll(comType, 100)
 
@@ -120,7 +170,7 @@ def main():
 	# with MeasurementFile() as mf:
 	# 	mf.addVarianceMeasurement(comType, opCount, tSize, data, {"Notice": "First Test"}, force=True)
 
-	# tab = runTestsFor(comType, 1)
+	# tab = runTestsFor(comType, 32)
 
 	# data = tab.export()
 	# print(data)
@@ -144,6 +194,7 @@ def main():
 	# 	print("\n\n%s/%s" % (tl1.successCount, tl1.tryCount), tl1.getAvgTime())
 
 	# host.deactivate()
+	# setup(SetupTypes.CLEAR)
 
 
 if __name__ == "__main__":

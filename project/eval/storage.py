@@ -115,6 +115,24 @@ class MeasurementFile():
 				measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
 		return measurements
 
+	def getAvailableMeasurements_new(self, comType: CommunicationType, totalLoads: int):
+		group = self.file.require_group("%s/%s" % (comType.value, totalLoads))
+		result = {}
+		for c in group:
+			dataIndex = 1
+			while "M%s" % dataIndex in group[c]:
+				dataIndex += 1
+			data = group[c]["M%s" % (dataIndex - 1)][:]
+			size = data.shape
+			tab = data[1:size[0], 1:size[1]]
+			opCountTab, tSizeTab = data[0, 1:size[1]], data[1:size[0], 0]
+			measurements = {}
+			for i1, opCount in enumerate(opCountTab):
+				for i2, tSize in enumerate(tSizeTab):
+					measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
+			result[c] = measurements
+		return result
+
 	def addBootstrapResults(self, comType: CommunicationType, stdData, ciData1, ciData2):
 		self.addMeasurement("_STD", comType, {"description": "Standard error"})
 		self.addMeasurementData("_STD", comType, stdData)
@@ -122,6 +140,16 @@ class MeasurementFile():
 		self.addMeasurementData("_CI1", comType, ciData1)
 		self.addMeasurement("_CI2", comType, {"description": "Upper bound of confidence interval"})
 		self.addMeasurementData("_CI2", comType, ciData2)
+
+	def addSimpleMeasurement(self, data: Any, mName: str, attributes: Dict[str, Any] = {}):
+		group = self.file.require_group("OTHER")
+		for name, val in attributes.items():
+			group.attrs[name] = val
+		group.create_dataset(mName, data=data)
+
+	def getSimpleMeasurement(self, name: str):
+		group = self.file.require_group("OTHER")
+		return group[name][:]
 
 	def close(self):
 		self.file.close()

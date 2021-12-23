@@ -74,7 +74,7 @@ UnpackedMsg = namedtuple("UnpackedMsg", ["isStart", "isEnd", "sender", "status",
 
 def unpackMsg(msg) -> UnpackedMsg:
 	if len(msg) < 3:
-		return UnpackedMsg._make([False, False, -1, -1, -1, -1, ""])
+		return
 	isStart = msg[0] == "~"
 	isEnd = msg[-2] == ";" or msg[-3] == ";"
 	dataLen = len(msg)
