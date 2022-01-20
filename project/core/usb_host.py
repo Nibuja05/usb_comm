@@ -14,6 +14,7 @@ import time
 
 from core.usb_util import GetDevice, MsgAction, MsgOperation, MsgStatus, MsgSender, packMsg, unpackMsg, GetAllDevices, UnpackedMsg, byteArrToString
 from core.usb_util import CONFIGURATION_ID, SETTING_ID, OUT_ENDPOINT_ID, IN_ENDPOINT_ID
+from core.resource_manager import SetHostCores
 from util import suppress_stdout
 
 
@@ -145,13 +146,13 @@ class USB_Host:
 		answers = []
 		actionCount = maxDevices if maxDevices >= 0 else self.getCount()
 		for i in range(actionCount):
-			if operation == MsgOperation.TESTLOAD:
-				calculate(count)
 			dataLen = int(data)
 			if dataLen > 0:
 				answers.append(self.sendMessage(MsgAction.CALCULATE, operation, data, i, minSize=dataLen))
 			else:
 				answers.append(UnpackedMsg._make([True, True, -1, -1, -1, -1, ""]))
+			if operation == MsgOperation.TESTLOAD:
+				calculate(count)
 		return answers
 
 	def clearMessages(self, id: int = -1):
@@ -197,14 +198,15 @@ class USB_Host_Threading(USB_Host):
 
 	def processSingleRequest(self, index: int, results: List[UnpackedMsg], operation: MsgOperation, data: str, count: int):
 		# do time intensive calculations on the host
-		if operation == MsgOperation.TESTLOAD:
-			calculate(count)
 		dataLen = int(data)
 		device = self.devices[index]
 		if dataLen > 0:
 			results[index] = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
 		else:
 			results[index] = UnpackedMsg._make([True, True, -1, -1, -1, -1, ""])
+
+		if operation == MsgOperation.TESTLOAD:
+			calculate(count)
 
 		device.device.finalize()
 
@@ -247,14 +249,15 @@ class USB_Host_Asyncio(USB_Host):
 		return results
 
 	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
-		if operation == MsgOperation.TESTLOAD:
-			calculate(count)
 		dataLen = int(data)
 		device = self.devices[index]
 		if dataLen > 0:
 			result = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
 		else:
 			result = UnpackedMsg._make([True, True, -1, -1, -1, -1, ""])
+
+		if operation == MsgOperation.TESTLOAD:
+			calculate(count)
 
 		device.device.finalize()
 		return result
@@ -338,6 +341,7 @@ class USB_Host_Multiprocessing(USB_Host):
 
 	def handleProcess(self, index: int, sendCon: Connection, statusCon: Connection):
 		device: USB_Device = USB_Device(index, GetDevice(index))
+		SetHostCores()
 		sendCon.send(None)
 
 		while True:
@@ -351,14 +355,14 @@ class USB_Host_Multiprocessing(USB_Host):
 
 	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int, device: USB_Device):
 		# do time intensive calculations on the host
-		if operation == MsgOperation.TESTLOAD:
-			calculate(count)
-
 		dataLen = int(data)
 		if dataLen > 0:
 			unpackedMsg = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
 		else:
 			unpackedMsg = UnpackedMsg._make([True, True, -1, -1, -1, -1, ""])
+
+		if operation == MsgOperation.TESTLOAD:
+			calculate(count)
 
 		device.device.finalize()
 		return unpackedMsg

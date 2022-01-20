@@ -18,7 +18,7 @@ TRANSFER_SIZES = [100, 1000, 10000, 100000]
 # TRANSFER_SIZES = [1, 10, 100, 1000]
 # OPERATION_COUNTS = [20000000, 30000000]
 # TRANSFER_SIZES = [100]
-REPEAT_COUNT = 2
+REPEAT_COUNT = 10
 
 
 def runTestsFor(comType: CommunicationType, totalLoads: int = 1) -> MeasurementTable:
@@ -95,13 +95,18 @@ def runVarianceTestsForAll(comType: CommunicationType, repeats: int):
 	host.deactivate()
 
 
-def runAutomatedTests(devices: List[int], totalLoads: List[int], comType: CommunicationType):
-	print("Starting Automated Tests for:\n - Device Counts: %s\n - Total Load Count: %s" % (devices, totalLoads))
+def runAutomatedTests(devices: List[int], totalLoads: List[int], comType: CommunicationType, multiplyLoadCount: bool = False):
+	print("\n\nStarting Automated Tests [%s] for:\n - Device Counts: %s\n - Total Load Count: %s" % (comType.value, devices, totalLoads))
+	if multiplyLoadCount:
+		print(" - Multiplying Total Load Count by Device Counts")
 
 	for deviceCount in devices:
 		print("\nRunning Tests for %s device%s..." % (deviceCount, "" if deviceCount == 1 else "s"))
 
 		for totalLoad in totalLoads:
+			if multiplyLoadCount:
+				totalLoad *= deviceCount
+
 			setup(SetupTypes.CLEAR)
 			setup(SetupTypes.CREATE, deviceCount)
 			setup(SetupTypes.START)
@@ -125,9 +130,16 @@ def runAutomatedTests(devices: List[int], totalLoads: List[int], comType: Commun
 
 
 def main():
-	comType = CommunicationType.THREADING
-	print("\n\nAUTOMATION FOR %s\n\n" % comType)
-	runAutomatedTests([1, 4, 8, 16, 32], [1, 10, 50], comType)
+	print("=======================")
+	print("TEST AUTOMATION RUNNING")
+	print("=======================\n")
+	# comType = CommunicationType.MULTIPROCESSING
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], comType, True)
+
+	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
+	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
+	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
+	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
 
 	# setup(SetupTypes.CLEAR)
 	# setup(SetupTypes.CREATE)
