@@ -12,6 +12,7 @@ class TestLoad():
 		self.count = count
 		self.dataLen = dataLen
 		self.data = "a" * dataLen
+		self.times = []
 		self.time = 0
 		self.tryCount = 0
 		self.successCount = 0
@@ -25,6 +26,7 @@ class TestLoad():
 
 	def stopMeasure(self):
 		time = timer() - self.__startTime if self.__startTime else 0
+		self.times.append(time)
 		self.time += time
 
 	def addFailedTry(self):
@@ -47,9 +49,13 @@ class TestLoad():
 	def getTotalTime(self):
 		return self.time
 
+	def getAllTimes(self):
+		return self.times
+
 	def reset(self):
 		self.cancelMeasure()
 		self.time = 0
+		self.times = []
 		self.tryCount = 0
 		self.successCount = 0
 		self.success = False

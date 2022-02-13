@@ -7,7 +7,7 @@ import time
 import numpy as np
 
 from core.usb_util import CommunicationType
-from eval.storage import MeasurementFile, MeasurementTable
+from eval.storage import MeasurementFile, MeasurementTable, MultiMeasurementTable
 from core.usb_host import USB_Host
 from setup.create_devices import setup, SetupTypes
 from util import printProgress
@@ -37,9 +37,27 @@ def runTestsFor(comType: CommunicationType, totalLoads: int = 1) -> MeasurementT
 		tl = TestLoad(opCount, tSize)
 		ProcessTestLoad(host, tl, totalLoads, REPEAT_COUNT)
 		tab.insert(opCount, tSize, tl.getAvgTime())
-		# print("[%s, %s]" % (opCount, tSize), "%s/%s" % (tl.successCount, tl.tryCount), tl.getAvgTime())
 
-		# host.clearMessages()
+	host.deactivate()
+	return tab
+
+
+def runDetailedTestsFor(comType: CommunicationType, totalLoads: int = 1) -> MeasurementTable:
+	print("\nPrepare Tests...")
+	host = GetAndActivateHost(comType)
+	host.prepareDevices()
+
+	# sometimes the first communication with a device is a little slower after the devices were created,
+	# so we ping them here to let the ping take up the creation delay
+	host.ping()
+	host.clearMessages()
+
+	tab = MultiMeasurementTable(OPERATION_COUNTS, TRANSFER_SIZES)
+	for opCount, tSize in product(OPERATION_COUNTS, TRANSFER_SIZES):
+		print("[%s, %s]" % (opCount, tSize))
+		tl = TestLoad(opCount, tSize)
+		ProcessTestLoad(host, tl, totalLoads, REPEAT_COUNT)
+		tab.insert(opCount, tSize, tl.getAllTimes())
 
 	host.deactivate()
 	return tab
@@ -129,6 +147,41 @@ def runAutomatedTests(devices: List[int], totalLoads: List[int], comType: Commun
 		setup(SetupTypes.CLEAR)
 
 
+def runDetailedAutomatedTests(devices: List[int], totalLoads: List[int], comType: CommunicationType, multiplyLoadCount: bool = False):
+	print("\n\nStarting Automated Tests [%s] for:\n - Device Counts: %s\n - Total Load Count: %s" % (comType.value, devices, totalLoads))
+	if multiplyLoadCount:
+		print(" - Multiplying Total Load Count by Device Counts")
+
+	for deviceCount in devices:
+		print("\nRunning Tests for %s device%s..." % (deviceCount, "" if deviceCount == 1 else "s"))
+
+		for totalLoad in totalLoads:
+			if multiplyLoadCount:
+				totalLoad *= deviceCount
+
+			setup(SetupTypes.CLEAR)
+			setup(SetupTypes.CREATE, deviceCount)
+			setup(SetupTypes.START)
+			time.sleep(0.25)
+
+			measureName = "%s/%s" % (totalLoad, deviceCount)
+
+			time.sleep(0.5)
+			table = runDetailedTestsFor(comType, totalLoad)
+			data = table.export()
+
+			with MeasurementFile(True) as mf:
+				mf.addMeasurement(measureName, comType, {
+					"Info": "Measurements taken with a specific amount of total testloads for device count",
+					"Total Load Count": totalLoad,
+					"Device Count": deviceCount,
+					"Try Count": REPEAT_COUNT
+				})
+				mf.addMeasurementData(measureName, comType, data, {"Repeats": REPEAT_COUNT})
+
+		setup(SetupTypes.CLEAR)
+
+
 def main():
 	print("=======================")
 	print("TEST AUTOMATION RUNNING")
@@ -136,10 +189,15 @@ def main():
 	# comType = CommunicationType.MULTIPROCESSING
 	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], comType, True)
 
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
+
+	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
+	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
+	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
+	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
 
 	# setup(SetupTypes.CLEAR)
 	# setup(SetupTypes.CREATE)
