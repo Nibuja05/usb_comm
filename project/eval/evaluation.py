@@ -231,6 +231,7 @@ class DataVisualizer:
 			letterText += "%s:\t%s\t\t%s\n" % (name, tSize, opCount)
 		print(letterText)
 
+		ax.set_yscale("log")
 		plt.xticks(X + (width / 2) * (self.count - 1), xTicks)
 		plt.ylabel("Messzeit in s")
 		plt.title("Messergebnisse")
@@ -282,19 +283,22 @@ class DataVisualizer:
 		plt.show()
 
 
-def showOperationProgression():
+def showOperationProgression(showLog=False):
 	opCounts = np.linspace(10**4, 10**7, 25)
+	fig, ax = plt.subplots()
 
 	for comType in [CommunicationType.BASIC, CommunicationType.THREADING, CommunicationType.MULTIPROCESSING]:
 
 		with MeasurementFile() as mf:
 			data = mf.getSimpleMeasurement("CountProgress [%s]" % comType.value)
 
-			plt.plot(opCounts, data, label=comType.value)
+			ax.plot(opCounts, data, label=comType.value)
 
 	for x in OPERATION_COUNTS:
-		plt.axvline(x, color="red", linewidth=2)
+		ax.axvline(x, color="red", linewidth=1, linestyle=":")
 
+	if showLog:
+		ax.set_xscale("log")
 	plt.xlabel("Berechnungen")
 	plt.ylabel("Messzeit in s")
 	plt.title("Unterschiedliche Berechnungen bei gleicher Größe (100)")
@@ -352,6 +356,24 @@ def showDeviceCountProgression(opCount: int = 10000, tSize: int = 100):
 	plt.subplots_adjust(left=0.1, bottom=0.1, right=0.65, top=0.9)
 	plt.legend(loc='best', bbox_to_anchor=(1, 0.95))
 	plt.show()
+
+
+def showBoxplot():
+	with MeasurementFile() as mf:
+		dataList = []
+		# for comType in CommunicationType:
+		# 	data = mf.getAvailableVarianceMeasurements(comType)[100000][1000]
+		# 	dataList.append(data)
+		for count in OPERATION_COUNTS:
+			data = mf.getAvailableVarianceMeasurements(CommunicationType.MULTIPROCESSING)[count][1000]
+			dataList.append(data)
+		fig, ax = plt.subplots()
+		ax.set_title('Basic Plot')
+		ax.boxplot(dataList)
+		ax.set_yscale("log")
+		# ax.set_xticklabels(CommunicationType.toList())
+		ax.set_xticklabels(OPERATION_COUNTS)
+		plt.show()
 
 
 if __name__ == "__main__":

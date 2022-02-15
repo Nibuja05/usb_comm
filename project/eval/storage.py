@@ -42,10 +42,41 @@ class MeasurementTable():
 		return tab
 
 
+class MultiMeasurementTable():
+	def __init__(self, opCounts: List[int], tSizes: List[int], count: int):
+		self.count = count
+		self.size = (len(opCounts), len(tSizes))
+		self.data = np.zeros(self.size, dtype=np.float32)
+		self.opCounts = np.array(opCounts, dtype=np.float32)
+		self.tSizes = np.array(tSizes, dtype=np.float32).reshape((len(tSizes), 1))
+
+	def insert(self, opCount: int, tSize: int, values: List[float]):
+		foundOpCount = np.where(self.opCounts == opCount)[0]
+		if len(foundOpCount) <= 0:
+			return
+		xIndex = foundOpCount[0]
+		foundTSizes = np.where(self.tSizes == tSize)[0]
+		if len(foundOpCount) <= 0:
+			return
+		yIndex = foundTSizes[0]
+		self.data[yIndex, xIndex] = ",".join(values)
+
+	def export(self):
+		tab = np.zeros((self.size[0] + 1, self.size[1] + 1), dtype=np.float32)
+		tab[0, 1:1 + len(self.opCounts)] = self.opCounts
+		tab[1:1 + self.tSizes.shape[0], 0:1] = self.tSizes
+		tab[1:1 + self.data.shape[0], 1:1 + self.data.shape[1]] = self.data
+		return tab
+
+
 class MeasurementFile():
 
-	def __init__(self):
-		self.file = h5py.File(os.path.join(DATA_PATH, 'Measurements.hdf5'), 'a')
+	def __init__(self, detailed=False):
+		self.detailed = detailed
+		if not detailed:
+			self.file = h5py.File(os.path.join(DATA_PATH, 'Measurements.hdf5'), 'a')
+		else:
+			self.file = h5py.File(os.path.join(DATA_PATH, 'Measurements_Detailed.hdf5'), 'a')
 
 	def __enter__(self):
 		return self
@@ -112,7 +143,11 @@ class MeasurementFile():
 		measurements = {}
 		for i1, opCount in enumerate(opCountTab):
 			for i2, tSize in enumerate(tSizeTab):
-				measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
+				if not self.detailed:
+					measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
+				else:
+					valueList = [float(i) for i in tab[i1][i2].split(",")]
+					measurements.setdefault(int(opCount), {})[int(tSize)] = valueList
 		return measurements
 
 	def getAvailableMeasurements_new(self, comType: CommunicationType, totalLoads: int):
@@ -129,7 +164,11 @@ class MeasurementFile():
 			measurements = {}
 			for i1, opCount in enumerate(opCountTab):
 				for i2, tSize in enumerate(tSizeTab):
-					measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
+					if not self.detailed:
+						measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
+					else:
+						valueList = [float(i) for i in tab[i1][i2].split(",")]
+						measurements.setdefault(int(opCount), {})[int(tSize)] = valueList
 			result[c] = measurements
 		return result
 
