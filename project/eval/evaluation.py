@@ -1,6 +1,7 @@
 import __init__
 from typing import List, Tuple
 import math
+import sys
 from functools import reduce
 from itertools import product
 import numpy as np
@@ -10,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from eval.storage import MeasurementFile, MeasurementTable
 from core.usb_util import CommunicationType
-from eval.measurement import OPERATION_COUNTS, TRANSFER_SIZES
+from eval.measurement import OPERATION_COUNTS, TRANSFER_SIZES, DEVICE_COUNTS, LOADS_PER_DEVICE
 
 
 # from https://stackoverflow.com/questions/37765197/darken-or-lighten-a-color-in-matplotlib
@@ -148,7 +149,7 @@ class DataVisualizer:
 		self.data = {}
 		self.count = 0
 
-	def addData(self, comType: CommunicationType):
+	def addData(self, comType: CommunicationType, useOld = False):
 		self.count += 1
 		propCycle = plt.rcParams['axes.prop_cycle']
 		colors = propCycle.by_key()['color']
@@ -161,8 +162,15 @@ class DataVisualizer:
 		with MeasurementFile() as mf:
 			variances = mf.getAvailableVarianceMeasurements(comType)
 			measurements = mf.getAvailableMeasurements(comType, "Final")
+			newMeasurements = {}
+
+			for deviceCount, loadPerDevice in product(DEVICE_COUNTS, LOADS_PER_DEVICE):
+				totalLoads = deviceCount * loadPerDevice
+				newMeasurements[totalLoads] = mf.getAvailableMeasurements_new(comType, totalLoads, useOld)
+
 			self.data[comType] = {
 				"measurements": measurements,
+				"newMeasurements": newMeasurements,
 				"variances": variances,
 				"color": colors[indeces[comType]],
 			}
@@ -189,9 +197,9 @@ class DataVisualizer:
 		print(opCount, tSize)
 		count = len(OPERATION_COUNTS) * len(TRANSFER_SIZES)
 		if opCount:
-			count = len(OPERATION_COUNTS)
-		elif tSize:
 			count = len(TRANSFER_SIZES)
+		elif tSize:
+			count = len(OPERATION_COUNTS)
 		X = np.arange(count)
 		width = 0.8 / self.count
 		index = 0
@@ -236,6 +244,134 @@ class DataVisualizer:
 		plt.ylabel("Messzeit in s")
 		plt.title("Messergebnisse")
 		plt.legend(loc='best')
+		plt.show()
+
+
+	def showScatterPlot(self, deviceCount: int = None, loadsPerDevice: int = None, opCount: int = None, tSize: int = None, comTypes: List[CommunicationType] = []):
+		fig, ax = plt.subplots()
+
+		mode = "operations"
+		if opCount and not tSize:
+			mode = "size"
+
+		minArea = 3
+		maxArea = 20
+
+		opCountAreaTable = {
+			10000: minArea, 
+			100000: minArea * 5, 
+			1000000: minArea * 10, 
+			10000000: minArea * 20,
+		}
+		transferSizeAreaTable = {
+			100: minArea,
+			1000: minArea * 5,
+			10000: minArea * 10,
+			100000: minArea *20,
+		}
+
+
+		index = 0
+		scatter = None
+
+		for comType, data in self.data.items():
+			if len(comTypes) > 0 and not comType in comTypes:
+				continue
+
+			offsetMult = 0.03
+			if not deviceCount:
+				offsetMult = 0.1
+			slightOffset = (-1.5 + index) * offsetMult
+			index += 1
+
+			x = []
+			y = []
+			areas = []
+			colors = []
+			color = data["color"]
+
+			if not deviceCount:
+				if not loadsPerDevice:
+					loadsPerDevice = 1
+				for d in DEVICE_COUNTS:
+					totalLoad = d * loadsPerDevice
+
+					if not opCount:
+						if not tSize:
+							tSize = TRANSFER_SIZES[-1]
+						for c in OPERATION_COUNTS:
+							x.append(d + slightOffset)
+							y.append(data["newMeasurements"][totalLoad][d][c][tSize])
+							colors.append(color)
+							areas.append(opCountAreaTable[c])
+
+					elif not tSize:
+						if not opCount:
+							opCount = OPERATION_COUNTS[-1]
+						for t in TRANSFER_SIZES:
+							# if totalLoad == 128:
+							# 	print(comType.value, t, data["newMeasurements"][totalLoad][d][opCount][t])
+							x.append(d + slightOffset)
+							y.append(data["newMeasurements"][totalLoad][d][opCount][t])
+							colors.append(color)
+							areas.append(transferSizeAreaTable[t])
+
+			elif not loadsPerDevice:
+				if not deviceCount:
+					deviceCount = 32
+				for l in LOADS_PER_DEVICE:
+					totalLoad = deviceCount * l
+
+					if not opCount:
+						if not tSize:
+							tSize = TRANSFER_SIZES[-1]
+						for c in OPERATION_COUNTS:
+							x.append(l + slightOffset)
+							y.append(data["newMeasurements"][totalLoad][deviceCount][c][tSize])
+							colors.append(color)
+							areas.append(opCountAreaTable[c])
+
+					elif not tSize:
+						if not opCount:
+							opCount = OPERATION_COUNTS[0]
+						for t in TRANSFER_SIZES:
+							x.append(l + slightOffset)
+							y.append(data["newMeasurements"][totalLoad][deviceCount][opCount][t])
+							colors.append(color)
+							areas.append(transferSizeAreaTable[t])
+
+			scatter = ax.scatter(x,y, s=areas, c=colors, label=comType.value)
+
+		legend1 = plt.legend(loc="upper right", framealpha=0.4, bbox_to_anchor=(0.9, 1))
+		ax.add_artist(legend1)
+
+		mod2 = ""
+		comTypeCount = 4
+		if len(comTypes) > 0:
+			comTypeCount = len(comTypes)
+
+		if scatter:
+			handles, _ = scatter.legend_elements(prop="sizes", alpha=0.6)
+			if mode == "operations":
+				labels = OPERATION_COUNTS
+				legend2 = plt.legend(handles, labels, loc="upper right", title="Operationsanzahl", framealpha=0.4, bbox_to_anchor=(0.9, 0.95 - comTypeCount * 0.05))
+				mod2 = "Datengröße: %s" % tSize
+			else:
+				labels = TRANSFER_SIZES
+				legend2 = plt.legend(handles, labels, loc="upper right", title="Datengröße", framealpha=0.4, bbox_to_anchor=(0.9, 0.95 - comTypeCount * 0.05))
+				mod2 = "%s Operationen" % opCount
+
+		mod1 = ""
+		if not deviceCount:
+			plt.xlabel("Geräteanzahl")
+			plt.xticks(DEVICE_COUNTS)
+			mod1 = "pro Gerät: %s" % loadsPerDevice
+		else:
+			plt.xlabel("Prüflasten pro Gerät")
+			plt.xticks(LOADS_PER_DEVICE)
+			mod1 = "für %s Geräte" % deviceCount
+		plt.ylabel("Messzeit in s")
+		plt.title("Messergebnisse (%s; %s)" % (mod1, mod2))
 		plt.show()
 
 	def show3dBars(self):
@@ -375,19 +511,49 @@ def showBoxplot():
 		ax.set_xticklabels(OPERATION_COUNTS)
 		plt.show()
 
+	
+def checkIdentical_T(type1: CommunicationType, type2: CommunicationType):
+	with MeasurementFile() as mf:
+		measure1 = mf.getAvailableVarianceMeasurements(type1)
+		measure2 = mf.getAvailableVarianceMeasurements(type2)
+
+		tSize = TRANSFER_SIZES[0]
+		opCount = OPERATION_COUNTS[0]
+
+		print(measure1.keys(), tSize)
+		data1 = measure1[opCount]
+		# data2 = measure2[opCount, tSize]
+
+		print(data1)
+
 
 if __name__ == "__main__":
+	checkIdentical_T(CommunicationType.MULTIPROCESSING, CommunicationType.THREADING)
+	sys.exit()
+
 	# showDeviceCountProgression()
 	# showDeviceCountProgression(10000000, 100000)
 	showOperationProgression()
 
 	vis = DataVisualizer()
 	vis.addData(CommunicationType.MULTIPROCESSING)
-	vis.addData(CommunicationType.ASYNCIO)
+	vis.addData(CommunicationType.ASYNCIO, False)
 	vis.addData(CommunicationType.THREADING)
 	vis.addData(CommunicationType.BASIC)
 
-	vis.showBars(opCount=10000000)
+	# vis.showBars(opCount=10000000)
+	# vis.showBars_new(32)
+	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000000, comTypes=[CommunicationType.BASIC, CommunicationType.ASYNCIO])
+	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000000, comTypes=[CommunicationType.THREADING, CommunicationType.ASYNCIO])
+	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000)
+	# vis.showScatterPlot(loadsPerDevice=4, opCount=100000)
+	# vis.showScatterPlot(loadsPerDevice=4, opCount=1000000)
+	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000000)
+	# vis.showScatterPlot(deviceCount=32)
+	# vis.showScatterPlot(deviceCount=4)
+	# vis.showScatterPlot(deviceCount=8)
+	# vis.showScatterPlot(deviceCount=16)
+	# vis.showScatterPlot(deviceCount=32)
 	# vis.show3dBars()
 
 	# vis.showHist(10000, 100, True)

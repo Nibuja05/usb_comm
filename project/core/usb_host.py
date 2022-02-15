@@ -5,6 +5,7 @@ import usb.core as core
 from typing import Dict, List, Union, Tuple
 import threading
 from multiprocessing import Pipe, Process
+from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import traceback
 import psutil
@@ -13,6 +14,9 @@ from core.usb_util import GetDevice, MsgAction, MsgOperation, MsgStatus, MsgSend
 from core.usb_util import CONFIGURATION_ID, SETTING_ID, OUT_ENDPOINT_ID, IN_ENDPOINT_ID
 from core.resource_manager import SetHostCores
 from util import suppress_stdout
+
+# Should a threads be used to simulate asynchroneous behavior for asyncio?
+USE_ASYNC_THREADPOOL = True
 
 
 class USB_Device:
@@ -128,7 +132,7 @@ class USB_Host:
 
 			except Exception as e:
 				pass
-				# print("Send Error:", e)
+				print("Send Error:", e)
 				# print(traceback.format_exc())
 		return answers
 
@@ -231,15 +235,29 @@ class USB_Host_Asyncio(USB_Host):
 
 	async def processRequestsAsync(self, operation: MsgOperation, actionCount: int, data: str, count: int):
 		results = []
-		tasks = []
-		for i in range(actionCount):
-			task = asyncio.create_task(self.processSingleRequest(i, operation, data, count))
-			tasks.append(task)
-		for task in tasks:
-			results.append(await task)
+		if USE_ASYNC_THREADPOOL:
+			with ThreadPoolExecutor(max_workers=actionCount) as executor:
+				loop = asyncio.get_event_loop()
+				tasks = [
+					loop.run_in_executor(
+						executor,
+						self.processSingleRequest,
+						*(id, operation, data, count)
+					)
+					for id in range(actionCount)
+				]
+				for response in await asyncio.gather(*tasks):
+					results.append(response)
+		else:
+			tasks = []
+			for i in range(actionCount):
+				task = asyncio.create_task(self.processSingleRequestAsync(i, operation, data, count))
+				tasks.append(task)
+			for task in tasks:
+				results.append(await task)
 		return results
 
-	async def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
+	async def processSingleRequestAsync(self, index: int, operation: MsgOperation, data: str, count: int):
 		dataLen = int(data)
 		device = self.devices[index]
 		if dataLen > 0:
@@ -252,6 +270,24 @@ class USB_Host_Asyncio(USB_Host):
 
 		device.device.finalize()
 		return result
+
+	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
+		dataLen = int(data)
+		device = self.devices[index]
+		if dataLen > 0:
+			result = self.sendSingleMessage(device, MsgAction.CALCULATE, operation, dataLen, data)
+		else:
+			result = UnpackedMsg._make([True, True, -1, -1, -1, -1, ""])
+
+		if operation == MsgOperation.TESTLOAD:
+			calculate(count)
+
+		device.device.finalize()
+		return result
+
+	def requestClientAction(self, operation: MsgOperation, maxDevices: int = -1, data: str = "", count: int = 0):
+		actionCount = maxDevices if maxDevices >= 0 else self.getCount()
+		return self.processRequests(operation, actionCount, data, count)
 
 	def requestClientAction(self, operation: MsgOperation, maxDevices: int = -1, data: str = "", count: int = 0):
 		actionCount = maxDevices if maxDevices >= 0 else self.getCount()

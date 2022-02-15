@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import __init__
 import sys
 import os
 import re
@@ -6,10 +7,6 @@ import getopt
 import math
 from glob import glob
 from typing import List, Literal, Tuple
-
-currentdir = os.path.dirname(os.path.realpath(__file__))
-parentdir = os.path.dirname(currentdir)
-sys.path.append(parentdir)
 
 from util import runRootCommandIn, runRootCommand, runCommandWithOutput, ListEnum
 import core.usb_util as usb_util
@@ -165,6 +162,8 @@ def getCurDeviceCount() -> int:
 
 def getActiveDeciveCount() -> int:
 	count = 0
+	if not gadgetPath or gadgetPath == "":
+		getGadgetPath()
 	gadgetNames = [name for name in os.listdir(gadgetPath)]
 	for gadgetName in gadgetNames:
 		if "usb_" in gadgetName:

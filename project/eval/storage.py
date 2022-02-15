@@ -150,13 +150,15 @@ class MeasurementFile():
 					measurements.setdefault(int(opCount), {})[int(tSize)] = valueList
 		return measurements
 
-	def getAvailableMeasurements_new(self, comType: CommunicationType, totalLoads: int):
+	def getAvailableMeasurements_new(self, comType: CommunicationType, totalLoads: int, useOld = False):
 		group = self.file.require_group("%s/%s" % (comType.value, totalLoads))
 		result = {}
 		for c in group:
 			dataIndex = 1
 			while "M%s" % dataIndex in group[c]:
 				dataIndex += 1
+				if (useOld):
+					break
 			data = group[c]["M%s" % (dataIndex - 1)][:]
 			size = data.shape
 			tab = data[1:size[0], 1:size[1]]
@@ -165,11 +167,11 @@ class MeasurementFile():
 			for i1, opCount in enumerate(opCountTab):
 				for i2, tSize in enumerate(tSizeTab):
 					if not self.detailed:
-						measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i1][i2]
+						measurements.setdefault(int(opCount), {})[int(tSize)] = tab[i2][i1]
 					else:
-						valueList = [float(i) for i in tab[i1][i2].split(",")]
+						valueList = [float(i) for i in tab[i2][i1].split(",")]
 						measurements.setdefault(int(opCount), {})[int(tSize)] = valueList
-			result[c] = measurements
+			result[int(c)] = measurements
 		return result
 
 	def addBootstrapResults(self, comType: CommunicationType, stdData, ciData1, ciData2):

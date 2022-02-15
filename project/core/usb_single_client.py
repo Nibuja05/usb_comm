@@ -49,7 +49,7 @@ class USB_Client():
 
 		except Exception as e:
 			pass
-			# print("Receive Error:", e)
+			print("Receive Error:", e)
 		finally:
 			if "f" in locals():
 				f.close()

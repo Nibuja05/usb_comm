@@ -3,7 +3,7 @@ import __init__
 from typing import Any, List, Union
 import time
 from util import suppress_stdout
-from setup.create_devices import getActiveDeciveCount
+from setup.create_devices import getActiveDeciveCount, getGadgetPath, getMaxDeviceCount
 from core.usb_util import MsgOperation, MsgAction, MsgSender, USE_ACM, CommunicationType, MsgStatus, GetDeviceCount
 from core.usb_host import USB_Host, USB_Host_Asyncio, USB_Host_Multiprocessing, USB_Host_Threading
 from core.usb_client import USB_Client
@@ -19,11 +19,17 @@ def main():
 
 	# MakeSingleClients(5)
 
+	getGadgetPath()
 	host = GetAndActivateHost()
 
 	# r = host.sendMessage(MsgAction.CALCULATE, MsgOperation.TESTLOAD, "5,aaaaaaaaaa", 2)
-	r = host.sendMessage(MsgAction.PING, MsgOperation.NONE, "", 2)
-	print("> RESULT", r)
+	# r = host.sendMessage(MsgAction.PING, MsgOperation.NONE, "", 2)
+	# print("> RESULT", r)
+
+	r = host.ping()
+	print(r)
+
+	host.deactivate()
 
 	return
 
@@ -68,7 +74,7 @@ def ProcessTestLoad(host: USB_Host, load: TestLoad, loadCount: int, repeats: int
 
 
 def StartClientCalculation(host: USB_Host, operation: MsgOperation, data: str, clientID: int = -1) -> Union[None, str]:
-	answer = host.requestClientAction(operation, data, clientID)
+	answer = host.requestClientAction(operation, clientID, data)
 	if not answer:
 		return
 	if clientID >= 0:

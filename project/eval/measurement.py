@@ -18,6 +18,8 @@ TRANSFER_SIZES = [100, 1000, 10000, 100000]
 # TRANSFER_SIZES = [1, 10, 100, 1000]
 # OPERATION_COUNTS = [20000000, 30000000]
 # TRANSFER_SIZES = [100]
+DEVICE_COUNTS = [1, 2, 4, 8, 16, 32]
+LOADS_PER_DEVICE = [1, 2, 4]
 REPEAT_COUNT = 10
 
 
@@ -81,7 +83,7 @@ def runVarianceTestFor(comType: CommunicationType, opCount: int, tSize: int, rep
 	tl = TestLoad(opCount, tSize)
 	for i in range(repeats):
 		printProgress("Run Tests...", repeats, i + 1)
-		ProcessTestLoad(host, tl, -1, REPEAT_COUNT)
+		ProcessTestLoad(host, tl, 32, 1)
 		results.append(tl.getAvgTime())
 		tl.reset()
 
@@ -182,9 +184,13 @@ def runDetailedAutomatedTests(devices: List[int], totalLoads: List[int], comType
 		setup(SetupTypes.CLEAR)
 
 
-def runAutomatedVarianceTests(repeats: int):
+def runAutomatedVarianceTests(repeats: int, comTypes: List[CommunicationType] = []):
 	print("\n\nStarting Automated Variance Tests with %s repeats\n" % repeats)
-	for comType in CommunicationType:
+
+	if len(comTypes) < 1:
+		comTypes = CommunicationType
+
+	for comType in comTypes:
 		print("Run for %s" % comType.value)
 
 		setup(SetupTypes.CLEAR)
@@ -192,6 +198,7 @@ def runAutomatedVarianceTests(repeats: int):
 		setup(SetupTypes.START)
 		time.sleep(3)
 
+		print("Setup complete")
 		runVarianceTestsForAll(comType, repeats)
 
 		time.sleep(3)
@@ -204,20 +211,22 @@ def main():
 	print("TEST AUTOMATION RUNNING")
 	print("=======================\n")
 
-	runAutomatedVarianceTests(100)
+	# runVarianceTestFor(CommunicationType.ASYNCIO, 10000, 100, 10)
+
+	runAutomatedVarianceTests(30, [CommunicationType.ASYNCIO, CommunicationType.MULTIPROCESSING])
 	# runAutomatedVarianceTestsFor(CommunicationType.MULTIPROCESSING, 100)
 	# comType = CommunicationType.MULTIPROCESSING
 	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], comType, True)
 
-	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
-	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
-	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
-	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
+	# runAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.BASIC, True)
+	# runAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.THREADING, True)
+	# runAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.ASYNCIO, True)
+	# runAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.MULTIPROCESSING, True)
 
-	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
-	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
-	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
-	runDetailedAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
+	# runDetailedAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.BASIC, True)
+	# runDetailedAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.THREADING, True)
+	# runDetailedAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.ASYNCIO, True)
+	# runDetailedAutomatedTests(DEVICE_COUNTS, LOADS_PER_DEVICE, CommunicationType.MULTIPROCESSING, True)
 
 	# setup(SetupTypes.CLEAR)
 	# setup(SetupTypes.CREATE)
