@@ -51,8 +51,8 @@ class MsgOperation(ListEnum):
 class CommunicationType(ListEnum):
 	BASIC = "BASIC"
 	THREADING = "THREADING"
-	MULTIPROCESSING = "MULTIPROCESSING"
 	ASYNCIO = "ASYNCIO"
+	MULTIPROCESSING = "MULTIPROCESSING"
 
 
 def byteArrToString(arr):

@@ -377,19 +377,17 @@ def showBoxplot():
 
 
 if __name__ == "__main__":
-	# showBoxplot()
 	# showDeviceCountProgression()
 	# showDeviceCountProgression(10000000, 100000)
 	showOperationProgression()
-	# showOperationProgression(True)
 
-	# vis = DataVisualizer()
-	# vis.addData(CommunicationType.MULTIPROCESSING)
-	# vis.addData(CommunicationType.ASYNCIO)
-	# vis.addData(CommunicationType.THREADING)
-	# vis.addData(CommunicationType.BASIC)
+	vis = DataVisualizer()
+	vis.addData(CommunicationType.MULTIPROCESSING)
+	vis.addData(CommunicationType.ASYNCIO)
+	vis.addData(CommunicationType.THREADING)
+	vis.addData(CommunicationType.BASIC)
 
-	# vis.showBars(opCount=10000000)
+	vis.showBars(opCount=10000000)
 	# vis.show3dBars()
 
 	# vis.showHist(10000, 100, True)
