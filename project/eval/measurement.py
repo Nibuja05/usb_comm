@@ -129,17 +129,37 @@ def runAutomatedTests(devices: List[int], totalLoads: List[int], comType: Commun
 		setup(SetupTypes.CLEAR)
 
 
+def runAutomatedVarianceTests(repeats: int):
+	print("\n\nStarting Automated Variance Tests with %s repeats\n" % repeats)
+	for comType in CommunicationType:
+		print("Run for %s" % comType.value)
+
+		setup(SetupTypes.CLEAR)
+		setup(SetupTypes.CREATE, 32)
+		setup(SetupTypes.START)
+		time.sleep(3)
+
+		runVarianceTestsForAll(comType, repeats)
+
+		time.sleep(3)
+
+	setup(SetupTypes.CLEAR)
+
+
 def main():
 	print("=======================")
 	print("TEST AUTOMATION RUNNING")
 	print("=======================\n")
+
+	runAutomatedVarianceTests(100)
+	# runAutomatedVarianceTestsFor(CommunicationType.MULTIPROCESSING, 100)
 	# comType = CommunicationType.MULTIPROCESSING
 	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], comType, True)
 
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
-	runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.BASIC, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.THREADING, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.ASYNCIO, True)
+	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], CommunicationType.MULTIPROCESSING, True)
 
 	# setup(SetupTypes.CLEAR)
 	# setup(SetupTypes.CREATE)
@@ -155,8 +175,10 @@ def main():
 	# host.ping()
 	# host.clearMessages()
 
-	# tl = TestLoad(0, 0)
-	# ProcessTestLoad(host, tl, 32, 500)
+	# print("Run...")
+
+	# tl = TestLoad(1000000, 10000)
+	# ProcessTestLoad(host, tl, 32, 10)
 
 	# print(tl.getAvgTime())
 

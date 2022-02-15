@@ -51,8 +51,9 @@ class USB_Client(threading.Thread):
 					break
 
 		except Exception as e:
-			print("Receive Error:", e)
-			print(traceback.format_exc())
+			pass
+			# print("Receive Error:", e)
+			# print(traceback.format_exc())
 		finally:
 			f.close()
 
@@ -73,7 +74,8 @@ class USB_Client(threading.Thread):
 			response["status"], response["data"] = self.handleInput(content)
 
 		else:
-			print("Cannot respond to: ", action)
+			pass
+			# print("Cannot respond to: ", action)
 		return response
 
 	def handleInput(self, content: UnpackedMsg) -> Dict:

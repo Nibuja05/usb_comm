@@ -355,17 +355,17 @@ def showDeviceCountProgression(opCount: int = 10000, tSize: int = 100):
 
 
 if __name__ == "__main__":
-	showDeviceCountProgression()
-	showDeviceCountProgression(10000000, 100000)
-	# showOperationProgression()
+	# showDeviceCountProgression()
+	# showDeviceCountProgression(10000000, 100000)
+	showOperationProgression()
 
-	# vis = DataVisualizer()
-	# vis.addData(CommunicationType.MULTIPROCESSING)
-	# vis.addData(CommunicationType.ASYNCIO)
-	# vis.addData(CommunicationType.THREADING)
-	# vis.addData(CommunicationType.BASIC)
+	vis = DataVisualizer()
+	vis.addData(CommunicationType.MULTIPROCESSING)
+	vis.addData(CommunicationType.ASYNCIO)
+	vis.addData(CommunicationType.THREADING)
+	vis.addData(CommunicationType.BASIC)
 
-	# vis.showBars(opCount=10000000)
+	vis.showBars(opCount=10000000)
 	# vis.show3dBars()
 
 	# vis.showHist(10000, 100, True)

@@ -4,13 +4,10 @@ import os
 import usb.core as core
 from typing import Dict, List, Union, Tuple
 import threading
-from multiprocessing import Pipe, Process, Queue, Pool
+from multiprocessing import Pipe, Process
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 import traceback
-from functools import partial
 import psutil
-import time
 
 from core.usb_util import GetDevice, MsgAction, MsgOperation, MsgStatus, MsgSender, packMsg, unpackMsg, GetAllDevices, UnpackedMsg, byteArrToString
 from core.usb_util import CONFIGURATION_ID, SETTING_ID, OUT_ENDPOINT_ID, IN_ENDPOINT_ID
@@ -234,21 +231,15 @@ class USB_Host_Asyncio(USB_Host):
 
 	async def processRequestsAsync(self, operation: MsgOperation, actionCount: int, data: str, count: int):
 		results = []
-		with ThreadPoolExecutor(max_workers=actionCount) as executor:
-			loop = asyncio.get_event_loop()
-			tasks = [
-				loop.run_in_executor(
-					executor,
-					self.processSingleRequest,
-					*(id, operation, data, count)
-				)
-				for id in range(actionCount)
-			]
-			for response in await asyncio.gather(*tasks):
-				results.append(response)
+		tasks = []
+		for i in range(actionCount):
+			task = asyncio.create_task(self.processSingleRequest(i, operation, data, count))
+			tasks.append(task)
+		for task in tasks:
+			results.append(await task)
 		return results
 
-	def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
+	async def processSingleRequest(self, index: int, operation: MsgOperation, data: str, count: int):
 		dataLen = int(data)
 		device = self.devices[index]
 		if dataLen > 0:
