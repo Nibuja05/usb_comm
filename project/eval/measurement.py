@@ -92,7 +92,7 @@ def runVarianceTestFor(comType: CommunicationType, opCount: int, tSize: int, rep
 	return results
 
 
-def runVarianceTestsForAll(comType: CommunicationType, repeats: int):
+def runVarianceTestsForAll(comType: CommunicationType, repeats: int, altAsyncio = False):
 	totalCount = len(OPERATION_COUNTS) * len(TRANSFER_SIZES)
 	curProgress = 1
 
@@ -109,7 +109,7 @@ def runVarianceTestsForAll(comType: CommunicationType, repeats: int):
 		data = runVarianceTestFor(comType, opCount, tSize, repeats, host)
 
 		with MeasurementFile() as mf:
-			mf.addVarianceMeasurement(comType, opCount, tSize, data, {"Repeat Count": repeats}, force=True)
+			mf.addVarianceMeasurement(comType, opCount, tSize, data, {"Repeat Count": repeats}, force=True, altVersion=altAsyncio)
 		curProgress += 1
 
 	host.deactivate()
@@ -184,7 +184,7 @@ def runDetailedAutomatedTests(devices: List[int], totalLoads: List[int], comType
 		setup(SetupTypes.CLEAR)
 
 
-def runAutomatedVarianceTests(repeats: int, comTypes: List[CommunicationType] = []):
+def runAutomatedVarianceTests(repeats: int, comTypes: List[CommunicationType] = [], altAsyncio = False):
 	print("\n\nStarting Automated Variance Tests with %s repeats\n" % repeats)
 
 	if len(comTypes) < 1:
@@ -199,7 +199,7 @@ def runAutomatedVarianceTests(repeats: int, comTypes: List[CommunicationType] = 
 		time.sleep(3)
 
 		print("Setup complete")
-		runVarianceTestsForAll(comType, repeats)
+		runVarianceTestsForAll(comType, repeats, altAsyncio=altAsyncio and comType==CommunicationType.ASYNCIO)
 
 		time.sleep(3)
 
@@ -213,7 +213,8 @@ def main():
 
 	# runVarianceTestFor(CommunicationType.ASYNCIO, 10000, 100, 10)
 
-	runAutomatedVarianceTests(30, [CommunicationType.ASYNCIO, CommunicationType.MULTIPROCESSING])
+	runVarianceTestsForAll(CommunicationType.ASYNCIO, 30, altAsyncio=False)
+	# runAutomatedVarianceTests(30, [CommunicationType.MULTIPROCESSING])
 	# runAutomatedVarianceTestsFor(CommunicationType.MULTIPROCESSING, 100)
 	# comType = CommunicationType.MULTIPROCESSING
 	# runAutomatedTests([1, 2, 4, 8, 16, 32], [1, 2, 4], comType, True)

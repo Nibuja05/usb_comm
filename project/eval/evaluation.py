@@ -1,11 +1,12 @@
 import __init__
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import math
 import sys
 from functools import reduce
 from itertools import product
 import numpy as np
 import statsmodels.api as sm
+import scipy.stats as stats
 import pylab
 import matplotlib.pyplot as plt
 
@@ -33,6 +34,10 @@ def lighten_color(color, amount=0.5):
 		c = color
 	c = colorsys.rgb_to_hls(*mc.to_rgb(c))
 	return colorsys.hls_to_rgb(c[0], 1 - amount * (1 - c[1]), c[2])
+
+
+def getFirstDictValue(dict: Dict):
+	return list(dict.values())[0]
 
 
 def calculateStatisticValues(values: List[float]) -> float:
@@ -166,7 +171,9 @@ class DataVisualizer:
 
 			for deviceCount, loadPerDevice in product(DEVICE_COUNTS, LOADS_PER_DEVICE):
 				totalLoads = deviceCount * loadPerDevice
-				newMeasurements[totalLoads] = mf.getAvailableMeasurements_new(comType, totalLoads, useOld)
+				newMeasurements[totalLoads] = mf.getAvailableMeasurements_new(comType, totalLoads, useOld and comType==CommunicationType.ASYNCIO)
+			newMeasurements[50] = mf.getAvailableMeasurements_new(comType, 50)
+			newMeasurements[10] = mf.getAvailableMeasurements_new(comType, 10)
 
 			self.data[comType] = {
 				"measurements": measurements,
@@ -192,9 +199,8 @@ class DataVisualizer:
 		plt.legend(loc='upper right')
 		plt.show()
 
-	def showBars(self, opCount: int = None, tSize: int = None):
+	def showBars(self, opCount: int = None, tSize: int = None, logScale = True, showTable = False):
 		fig, ax = plt.subplots()
-		print(opCount, tSize)
 		count = len(OPERATION_COUNTS) * len(TRANSFER_SIZES)
 		if opCount:
 			count = len(TRANSFER_SIZES)
@@ -207,47 +213,155 @@ class DataVisualizer:
 			plotData = []
 			if opCount:
 				for s in TRANSFER_SIZES:
-					plotData.append(data["measurements"][opCount][s])
+					plotData.append(data["newMeasurements"][32][32][opCount][s])
 			elif tSize:
 				for c in OPERATION_COUNTS:
-					plotData.append(data["measurements"][c][tSize])
+					plotData.append(data["newMeasurements"][32][32][c][tSize])
 			else:
 				for s, c in product(TRANSFER_SIZES, OPERATION_COUNTS):
-					plotData.append(data["measurements"][c][s])
+					plotData.append(data["newMeasurements"][32][32][c][s])
 
 			ax.bar(X + width * index, plotData, width=width, label=comType.value, color=data["color"])
 			index += 1
 
 		xTicks = []
 		letterMap = {}
-		letter, index = 65, 1
+		index1, index2 = 1, 1
+		tableData = []
 		for c in OPERATION_COUNTS:
-			index = 1
+			index2 = 1
 			if opCount is not None and opCount != c:
 				continue
 			for s in TRANSFER_SIZES:
 				if tSize is not None and tSize != s:
 					continue
-				name = "%s%s" % (chr(letter), index)
+				name = "%s_%s" % (index1, index2)
 				xTicks.append(name)
 				letterMap[name] = (s, c)
-				index += 1
-			letter += 1
+				index2 += 1
+
+				tableData.append((name, c, s))
+			index1 += 1
 
 		letterText = "Name\tDatengröße\tBerechnungen\n"
 		for name, (tSize, opCount) in letterMap.items():
 			letterText += "%s:\t%s\t\t%s\n" % (name, tSize, opCount)
-		print(letterText)
 
-		ax.set_yscale("log")
-		plt.xticks(X + (width / 2) * (self.count - 1), xTicks)
+		if logScale:
+			ax.set_yscale("log")
+		plt.xticks(X + (width / 2) * (self.count - 1), xTicks, rotation=45)
 		plt.ylabel("Messzeit in s")
-		plt.title("Messergebnisse")
+		plt.title("Messergebnisse (Berechnungsanzahl, Datengröße)")
 		plt.legend(loc='best')
 		plt.show()
 
+		if not showTable:
+			return
 
-	def showScatterPlot(self, deviceCount: int = None, loadsPerDevice: int = None, opCount: int = None, tSize: int = None, comTypes: List[CommunicationType] = []):
+		print(letterText)
+
+		ig, ax = plt.subplots()
+
+		# hide axes
+		fig.patch.set_visible(False)
+		ax.axis('off')
+		ax.axis('tight')
+
+		ax.table(cellText=tableData, colLabels=["Benennung", "Berechnungsanzahl", "Datengröße"], loc='center')
+
+		# fig.tight_layout()
+
+		plt.show()
+
+	
+	def showLoadCountBars(self, opCount=None, tSize=None):
+		fig, ax = plt.subplots()
+
+		if not opCount:
+			opCount = OPERATION_COUNTS[0]
+		if not tSize:
+			tSize = TRANSFER_SIZES[0]
+
+		totalLoads = list(dict.fromkeys([d * l for d,l in product(DEVICE_COUNTS, LOADS_PER_DEVICE)]))
+
+		count = len(totalLoads)
+		X = np.arange(count)
+		width = 0.8
+		index = 0
+		for comType, data in self.data.items():
+			plotData = []
+			
+			for totalLoad in totalLoads:
+				plotData.append(getFirstDictValue(data["newMeasurements"][totalLoad])[opCount][tSize])
+
+			ax.bar(X + width * index, plotData, width=width, label=comType.value, color=data["color"])
+			index += 1
+
+		plt.xticks(X + (width / 2) * (self.count - 1), totalLoads)
+		plt.xlabel("Anzahl von Prüflasten")
+		plt.ylabel("Messzeit in s")
+		plt.title("Messergebnisse bei unterschiedlicher Anzahl von Prüflasten")
+		plt.show()
+
+	def showDeviceCountBars(self, opCount=None, tSize=None):
+		fig, ax = plt.subplots()
+
+		if not opCount:
+			opCount = OPERATION_COUNTS[0]
+		if not tSize:
+			tSize = TRANSFER_SIZES[0]
+
+		count = len(DEVICE_COUNTS)
+		X = np.arange(count)
+		width = 0.8
+		index = 0
+		for comType, data in self.data.items():
+			plotData = []
+			
+			for count in DEVICE_COUNTS:
+				plotData.append(data["newMeasurements"][count][count][opCount][tSize])
+
+			ax.bar(X + width * index, plotData, width=width, label=comType.value, color=data["color"])
+			index += 1
+
+		plt.xticks(X + (width / 2) * (self.count - 1), DEVICE_COUNTS)
+		plt.xlabel("Anzahl von Geräten")
+		plt.ylabel("Messzeit in s")
+		plt.title("Messergebnisse (Berechnungsanzahl=%s, Datengröße=%s)" % (opCount, tSize))
+		plt.show()
+
+	def showDeviceCountBars_all(self):
+		fig, ax = plt.subplots()
+
+		count = len(DEVICE_COUNTS)
+		X = np.arange(4)
+		width = 0.8 / count
+
+		for _, data in self.data.items():
+			index = 0
+			
+			for count in DEVICE_COUNTS:
+				plotData = []
+				for opCount, tSize in product([OPERATION_COUNTS[0], OPERATION_COUNTS[-1]],[TRANSFER_SIZES[0], TRANSFER_SIZES[-1]]):
+					plotData.append(data["newMeasurements"][count][count][opCount][tSize])
+
+				color = lighten_color(data["color"], 1 - index * 0.12)
+				ax.bar(X + width * index, plotData, width=width, label="%s Geräte" % count, color=color)
+				index += 1
+
+		ticks = []
+		for opCount, tSize in product([OPERATION_COUNTS[0], OPERATION_COUNTS[-1]],[TRANSFER_SIZES[0], TRANSFER_SIZES[-1]]):
+			ticks.append("c=%s\nn=%s" % (opCount, tSize))
+
+		plt.xticks(X + (width / 2) * (4 - 1), ticks)
+		plt.yscale("log")
+		# plt.xlabel("Anzahl von Prüflasten")
+		plt.ylabel("Messzeit in s")
+		plt.title("Messergebnisse (Berechnungsanzahl c, Datengröße n)")
+		plt.legend(loc="best")
+		plt.show()
+
+	def showScatterPlot(self, deviceCount: int = None, loadsPerDevice: int = None, opCount: int = None, tSize: int = None):
 		fig, ax = plt.subplots()
 
 		mode = "operations"
@@ -275,12 +389,9 @@ class DataVisualizer:
 		scatter = None
 
 		for comType, data in self.data.items():
-			if len(comTypes) > 0 and not comType in comTypes:
-				continue
-
 			offsetMult = 0.03
 			if not deviceCount:
-				offsetMult = 0.1
+				offsetMult = 0.15
 			slightOffset = (-1.5 + index) * offsetMult
 			index += 1
 
@@ -346,19 +457,17 @@ class DataVisualizer:
 		ax.add_artist(legend1)
 
 		mod2 = ""
-		comTypeCount = 4
-		if len(comTypes) > 0:
-			comTypeCount = len(comTypes)
+		comTypeCount = self.count
 
 		if scatter:
 			handles, _ = scatter.legend_elements(prop="sizes", alpha=0.6)
 			if mode == "operations":
 				labels = OPERATION_COUNTS
-				legend2 = plt.legend(handles, labels, loc="upper right", title="Operationsanzahl", framealpha=0.4, bbox_to_anchor=(0.9, 0.95 - comTypeCount * 0.05))
+				plt.legend(handles, labels, loc="upper right", title="Operationsanzahl", framealpha=0.4, bbox_to_anchor=(0.9, 0.95 - comTypeCount * 0.05))
 				mod2 = "Datengröße: %s" % tSize
 			else:
 				labels = TRANSFER_SIZES
-				legend2 = plt.legend(handles, labels, loc="upper right", title="Datengröße", framealpha=0.4, bbox_to_anchor=(0.9, 0.95 - comTypeCount * 0.05))
+				plt.legend(handles, labels, loc="upper right", title="Datengröße", framealpha=0.4, bbox_to_anchor=(0.9, 0.95 - comTypeCount * 0.05))
 				mod2 = "%s Operationen" % opCount
 
 		mod1 = ""
@@ -372,6 +481,73 @@ class DataVisualizer:
 			mod1 = "für %s Geräte" % deviceCount
 		plt.ylabel("Messzeit in s")
 		plt.title("Messergebnisse (%s; %s)" % (mod1, mod2))
+		plt.show()
+
+	def showVarCoefs(self):
+		fig,ax  = plt.subplots()
+
+		for comType, data in self.data.items():
+			color = data["color"]
+			x = []
+			y = []
+			areas = []
+
+			for opCount, tSize in product(OPERATION_COUNTS, TRANSFER_SIZES):
+				variances = data["variances"][opCount][tSize]
+
+				# Varianzkoeffizient
+				std = np.std(variances)
+				mean = np.mean(variances)
+				varCoef = std / mean
+				x.append(mean)
+				y.append(varCoef)
+
+				area = OPERATION_COUNTS.index(opCount) * TRANSFER_SIZES.index(tSize) * 6
+				areas.append(area)
+
+			ax.scatter(x, y, c=[color] * len(x), s=areas, label=comType.value)
+		
+		plt.legend(loc="best", framealpha=0.6)
+		plt.xlabel("Mittelwert")
+		plt.ylabel("Varianzkoeffizient")
+		plt.title("Durchschnittliche Abweichung von Messwerten")
+		plt.show()
+
+	def showTotalLoadScatter(self, totalLoads = 50):
+		fig,ax  = plt.subplots()
+
+		index = 0
+
+		for comType, data in self.data.items():
+			offsetMult = 0.15
+			slightOffset = (-1.5 + index) * offsetMult
+			index += 1
+
+			color = data["color"]
+			x = []
+			y = []
+			areas = []
+
+			for d in DEVICE_COUNTS:
+				if d == 2:
+					continue
+				measurements = data["newMeasurements"][totalLoads][d]
+
+				for opCount, tSize in product(OPERATION_COUNTS, TRANSFER_SIZES):
+					x.append(d + slightOffset)
+					y.append(measurements[opCount][tSize])
+
+					area = OPERATION_COUNTS.index(opCount) * TRANSFER_SIZES.index(tSize) * 6
+					areas.append(area)
+
+			ax.scatter(x, y, c=[color] * len(x), s=areas, label=comType.value)
+		
+		# plt.legend(loc="best")
+		plt.legend(loc="upper right", framealpha=0.4, bbox_to_anchor=(0.93, 1))
+		plt.xlabel("Geräteanzahl")
+		plt.xticks([1,4,8,16,32])
+		plt.ylabel("Messzeit in s")
+		plt.title("Messergebnisse für %s Prüflasten" % totalLoads)
 		plt.show()
 
 	def show3dBars(self):
@@ -418,26 +594,85 @@ class DataVisualizer:
 		plt.legend(legendColors, legendNames, loc='upper right', bbox_to_anchor=(1, 0))
 		plt.show()
 
+	def generateSpeedupTable(self):
+
+		lines = {}
+
+		if not CommunicationType.BASIC in self.data:
+			print("No basic data found for comparison!")
+			return
+
+		for comType, data in self.data.items():
+			if comType is CommunicationType.BASIC:
+				continue
+
+			for d in DEVICE_COUNTS:
+				measurement = data["newMeasurements"][d][d]
+
+				for opCount, tSize in product(OPERATION_COUNTS, TRANSFER_SIZES):
+					
+					# syntax: ... & ... & ... \\
+					# \hline
+					value = measurement[opCount][tSize]
+					origValue = self.data[CommunicationType.BASIC]["newMeasurements"][d][d][opCount][tSize]
+					lines.setdefault((opCount, tSize), {}).setdefault(d, []).append(origValue / value)
+
+		markCell = lambda x: '\cellcolor{green!35}%s' % x
+		best = {}
+		for (opCount, tSize), devices in lines.items():
+			for d, (mVal, tVal) in devices.items():
+				curVal,_,_,_ = best.setdefault(d, (0, opCount, tSize, ""))
+				if mVal > tVal:
+					if mVal > curVal:
+						best[d] = (mVal, opCount, tSize, 0)
+				else:
+					if tVal > curVal:
+						best[d] = (tVal, opCount, tSize, 1)
+
+		for (opCount, tSize), devices in lines.items():
+			# curVal = best.setdefault()
+			line = "%s & %s & " % (opCount, tSize)
+			line += " & ".join(
+				[" & ".join(
+					[markCell("%.1f" % y) if 
+						best[d][1] == opCount and 
+						best[d][2] == tSize and 
+						best[d][3] == i 
+					else "%.1f" % y for i,y in enumerate(x)]
+				) for d, x in devices.items()]
+			)
+			line += r" \\"
+			print(line)
+
 
 def showOperationProgression(showLog=False):
 	opCounts = np.linspace(10**4, 10**7, 25)
 	fig, ax = plt.subplots()
 
-	for comType in [CommunicationType.BASIC, CommunicationType.THREADING, CommunicationType.MULTIPROCESSING]:
+	propCycle = plt.rcParams['axes.prop_cycle']
+	colors = propCycle.by_key()['color']
+	indeces = {
+		CommunicationType.BASIC: 0,
+		CommunicationType.THREADING: 1,
+		CommunicationType.ASYNCIO: 2,
+		CommunicationType.MULTIPROCESSING: 3,
+	}
+
+	for comType in [CommunicationType.BASIC]:
 
 		with MeasurementFile() as mf:
 			data = mf.getSimpleMeasurement("CountProgress [%s]" % comType.value)
-
-			ax.plot(opCounts, data, label=comType.value)
+			
+			ax.plot(opCounts, data, label=comType.value, color=colors[indeces[comType]])
 
 	for x in OPERATION_COUNTS:
-		ax.axvline(x, color="red", linewidth=1, linestyle=":")
+		ax.axvline(x, color="black", linewidth=1, linestyle=":")
 
 	if showLog:
 		ax.set_xscale("log")
 	plt.xlabel("Berechnungen")
 	plt.ylabel("Messzeit in s")
-	plt.title("Unterschiedliche Berechnungen bei gleicher Größe (100)")
+	plt.title("Unterschiedliche Berechnungsanzahl bei gleicher Größe (=100)")
 	plt.legend(loc='best')
 	plt.show()
 
@@ -512,44 +747,88 @@ def showBoxplot():
 		plt.show()
 
 	
-def checkIdentical_T(type1: CommunicationType, type2: CommunicationType):
+def checkIdentical_T(type1: CommunicationType, type2: CommunicationType, alpha=0.01, altAsyncio=False):
 	with MeasurementFile() as mf:
-		measure1 = mf.getAvailableVarianceMeasurements(type1)
-		measure2 = mf.getAvailableVarianceMeasurements(type2)
+		measure1 = mf.getAvailableVarianceMeasurements(type1, altAsyncio and type1 == CommunicationType.ASYNCIO)
+		measure2 = mf.getAvailableVarianceMeasurements(type2, altAsyncio and type2 == CommunicationType.ASYNCIO)
 
-		tSize = TRANSFER_SIZES[0]
-		opCount = OPERATION_COUNTS[0]
+		# data = []
+		maxCount = 0
+		rejectCount = 0
 
-		print(measure1.keys(), tSize)
-		data1 = measure1[opCount]
-		# data2 = measure2[opCount, tSize]
+		for opCount, tSize in product(OPERATION_COUNTS, TRANSFER_SIZES):
+			# tSize = TRANSFER_SIZES[0]
+			# opCount = OPERATION_COUNTS[0]
 
-		print(data1)
+			# print(measure1.keys(), tSize)
+			data1 = measure1[opCount][tSize]
+			data2 = measure2[opCount][tSize]
+
+			# Varianzkoeffizient
+			var1 = np.var(data1)
+			var2 = np.var(data2)
+			mean1 = np.mean(data1)
+			mean2 = np.mean(data2)
+			varCoef1 = var1 / mean1
+			varCoef2 = var2 / mean2
+
+			res = stats.ttest_ind(a=data1, b=data2, equal_var=False)
+			# res = stats.ks_2samp(data1, data2)
+			maxCount += 1
+
+			if res.pvalue >= alpha / len(data1):
+				rejectCount += 1
+				# print("\n%s,%s: %s" % (opCount, tSize, res.pvalue))
+
+				# data.append(data1)
+				# data.append(data2)
+				# fig, ax = plt.subplots()
+				# ax.boxplot([data1, data2])
+				# plt.show()
+		
+		print("%s / %s abgelehnt" % (rejectCount, maxCount))
+		# ax.boxplot(data)
+		# plt.show()
+
+
 
 
 if __name__ == "__main__":
-	checkIdentical_T(CommunicationType.MULTIPROCESSING, CommunicationType.THREADING)
-	sys.exit()
+	# checkIdentical_T(CommunicationType.THREADING, CommunicationType.MULTIPROCESSING, alpha=0.05)
+	# checkIdentical_T(CommunicationType.BASIC, CommunicationType.ASYNCIO, alpha=0.01, altAsyncio=True)
+	# checkIdentical_T(CommunicationType.THREADING, CommunicationType.ASYNCIO, alpha=0.01, altAsyncio=False)
+	# sys.exit()
 
 	# showDeviceCountProgression()
 	# showDeviceCountProgression(10000000, 100000)
-	showOperationProgression()
+	# showOperationProgression()
 
 	vis = DataVisualizer()
+	# vis.addData(CommunicationType.BASIC)
+	# vis.addData(CommunicationType.THREADING)
 	vis.addData(CommunicationType.MULTIPROCESSING)
-	vis.addData(CommunicationType.ASYNCIO, False)
-	vis.addData(CommunicationType.THREADING)
-	vis.addData(CommunicationType.BASIC)
+	# vis.addData(CommunicationType.ASYNCIO, True)
 
-	# vis.showBars(opCount=10000000)
-	# vis.showBars_new(32)
+	# vis.generateSpeedupTable()
+	# vis.showLoadCountBars()
+	# vis.showVarCoefs()
+	# vis.showDeviceCountBars(opCount=OPERATION_COUNTS[0], tSize=TRANSFER_SIZES[0])
+	# vis.showDeviceCountBars_all()
+	# vis.showBars(logScale=False)
+	# vis.showTotalLoadScatter(1)
+	# vis.showTotalLoadScatter(10)
+	# vis.showTotalLoadScatter(50)
+
+	vis.showBars(logScale=False)
+	# vis.showScatterPlot(tSize=100000)
+	# vis.showScatterPlot(opCount=10000000)
 	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000000, comTypes=[CommunicationType.BASIC, CommunicationType.ASYNCIO])
 	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000000, comTypes=[CommunicationType.THREADING, CommunicationType.ASYNCIO])
 	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000)
 	# vis.showScatterPlot(loadsPerDevice=4, opCount=100000)
 	# vis.showScatterPlot(loadsPerDevice=4, opCount=1000000)
 	# vis.showScatterPlot(loadsPerDevice=4, opCount=10000000)
-	# vis.showScatterPlot(deviceCount=32)
+	# vis.showScatterPlot(deviceCount=1)
 	# vis.showScatterPlot(deviceCount=4)
 	# vis.showScatterPlot(deviceCount=8)
 	# vis.showScatterPlot(deviceCount=16)

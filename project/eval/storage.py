@@ -101,8 +101,11 @@ class MeasurementFile():
 		dataSet.attrs["date"] = getCurDate()
 		return dataSet
 
-	def addVarianceMeasurement(self, comType: CommunicationType, opCount: int, tSize: int, data, attributes: Dict[str, Any] = {}, force: bool = False):
-		group = self.file.require_group("%s/%s" % ("_VARIANCE", comType.value))
+	def addVarianceMeasurement(self, comType: CommunicationType, opCount: int, tSize: int, data, attributes: Dict[str, Any] = {}, force: bool = False, altVersion: bool = False):
+		groupName = comType.value
+		if altVersion:
+			groupName += "_ALT"
+		group = self.file.require_group("%s/%s" % ("_VARIANCE", groupName))
 		measureName = "c%s_d%s" % (opCount, tSize)
 		if measureName in group:
 			if force:
@@ -118,24 +121,29 @@ class MeasurementFile():
 		dataSet.attrs["tSize"] = tSize
 		return dataSet
 
-	def getAvailableVarianceMeasurements(self, comType: CommunicationType):
+	def getAvailableVarianceMeasurements(self, comType: CommunicationType, altVersion: bool = False):
 		if "_VARIANCE" not in self.file:
 			return
 		group = self.file["_VARIANCE"]
-		if comType.value not in group:
+		groupName = comType.value
+		if altVersion:
+			groupName += "_ALT"
+		if groupName not in group:
 			return
-		variances: List[Dataset] = group[comType.value]
+		variances: List[Dataset] = group[groupName]
 		varianceMeasurements = {}
 		for var in variances:
 			dataSet = variances[var]
 			varianceMeasurements.setdefault(dataSet.attrs["opCount"], {})[dataSet.attrs["tSize"]] = dataSet[:]
 		return varianceMeasurements
 
-	def getAvailableMeasurements(self, comType: CommunicationType, groupName: str):
+	def getAvailableMeasurements(self, comType: CommunicationType, groupName: str, useOld = False):
 		group = self.file.require_group("%s/%s" % (comType.value, groupName))
 		dataIndex = 1
 		while "M%s" % dataIndex in group:
 			dataIndex += 1
+			if (useOld):
+				break
 		data = group["M%s" % (dataIndex - 1)][:]
 		size = data.shape
 		tab = data[1:size[0], 1:size[1]]
